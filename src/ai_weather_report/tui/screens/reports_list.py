@@ -166,9 +166,10 @@ class ReportsListScreen(Screen):
         sys.stderr = io.StringIO()
         try:
             articles = fetch_feeds(feeds, days=fetch_days, max_per_feed=20)
-        except Exception:
+        except Exception as e:
             sys.stderr = old_stderr
-            self.app.call_from_thread(self._finish_generate, False)
+            err = f"Feed fetch failed: {type(e).__name__}: {e}"
+            self.app.call_from_thread(self._finish_generate, None, None, err)
             return
         finally:
             sys.stderr = old_stderr
@@ -206,7 +207,9 @@ class ReportsListScreen(Screen):
         report_articles = unreported if unreported else all_articles
 
         if not report_articles:
-            self.app.call_from_thread(self._finish_generate, False)
+            self.app.call_from_thread(
+                self._finish_generate, None, None, "No articles available for report"
+            )
             return
 
         # Calculate days span for the editorial prompt
@@ -243,15 +246,18 @@ class ReportsListScreen(Screen):
                 progress_cb=on_report_progress,
             )
             tts_error = result.get("tts_error")
-        except Exception:
+            error_msg = None
+        except Exception as e:
             result = None
             tts_error = None
+            error_msg = f"{type(e).__name__}: {e}"
         finally:
             sys.stderr = old_stderr
 
-        self.app.call_from_thread(self._finish_generate, result, tts_error)
+        self.app.call_from_thread(self._finish_generate, result, tts_error, error_msg)
 
-    def _finish_generate(self, result: dict | None, tts_error: str | None) -> None:
+    def _finish_generate(self, result: dict | None, tts_error: str | None,
+                         error_msg: str | None = None) -> None:
         self._generating = False
         self._hide_progress()
         self._load_reports()
@@ -269,7 +275,10 @@ class ReportsListScreen(Screen):
             else:
                 self.query_one("#reports-status", Static).update("Report generated")
         else:
-            self.query_one("#reports-status", Static).update("Generation failed")
+            msg = f"Generation failed: {error_msg}" if error_msg else "Generation failed"
+            self.query_one("#reports-status", Static).update(msg)
+            if error_msg:
+                self.app.notify(error_msg, title="Report Failed", severity="error", timeout=15)
 
     def action_back(self) -> None:
         self.app.pop_screen()
