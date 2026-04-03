@@ -7,13 +7,21 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Vertical
 from textual.screen import Screen
-from textual.widgets import ListItem, ListView, Static
+from textual.widgets import ListItem, ListView, ProgressBar, Static
 
 from ai_weather_report import reports
+from ai_weather_report.config import REPORTS_DIR
 
 
 class ReportListItem(ListItem):
     """A single report row."""
+
+    DEFAULT_CSS = """
+    ReportListItem {
+        height: 4;
+        padding: 0 2;
+    }
+    """
 
     def __init__(self, report: dict) -> None:
         super().__init__()
@@ -32,8 +40,16 @@ class ReportListItem(ListItem):
         except ValueError:
             date_str = report_id
 
+        # Get audio duration
+        duration = ""
+        if has_audio:
+            dur = reports.get_audio_duration(report_id)
+            if dur:
+                duration = f"  \u2022  {dur}"
+
         yield Static(
-            f" {audio_icon}  {date_str}    {story_count} stories from {article_count} articles",
+            f" {audio_icon}  {date_str}{duration}\n"
+            f"    {story_count} stories from {article_count} articles",
             markup=False,
         )
 
@@ -49,6 +65,7 @@ class ReportsListScreen(Screen):
     def __init__(self) -> None:
         super().__init__()
         self._reports: list[dict] = []
+        self._generating = False
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -58,10 +75,14 @@ class ReportsListScreen(Screen):
         with Center():
             yield ListView(id="reports-list")
         with Vertical(id="reports-footer"):
+            yield Static("", id="reports-progress-label", markup=False)
+            yield ProgressBar(id="reports-progress", total=100, show_eta=False)
             yield Static("Loading...", id="reports-status", markup=False)
             yield Static("", id="reports-hint", markup=False)
 
     def on_mount(self) -> None:
+        self.query_one("#reports-progress-label").display = False
+        self.query_one("#reports-progress").display = False
         self._load_reports()
         self.query_one("#reports-list", ListView).focus()
         self._update_hint()
@@ -86,8 +107,20 @@ class ReportsListScreen(Screen):
 
     def _update_hint(self) -> None:
         self.query_one("#reports-hint", Static).update(
-            " g  Generate new report    Enter  View    Esc  Back"
+            " g  Generate new report    Enter  View    Esc  Back    q  Quit"
         )
+
+    def _show_progress(self, label: str, current: int, total: int) -> None:
+        pl = self.query_one("#reports-progress-label", Static)
+        pb = self.query_one("#reports-progress", ProgressBar)
+        pl.display = True
+        pb.display = True
+        pl.update(f"  {label}")
+        pb.update(total=total, progress=current)
+
+    def _hide_progress(self) -> None:
+        self.query_one("#reports-progress-label").display = False
+        self.query_one("#reports-progress").display = False
 
     @on(ListView.Selected, "#reports-list")
     def on_report_selected(self, event: ListView.Selected) -> None:
@@ -96,59 +129,115 @@ class ReportsListScreen(Screen):
             self.app.push_screen(ReportDetailScreen(event.item.report))
 
     def action_generate_report(self) -> None:
-        self.query_one("#reports-status", Static).update("Generating report...")
+        if self._generating:
+            return
+        self._generating = True
+        self._show_progress("Fetching feeds...", 0, 1)
         self._do_generate()
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def _do_generate(self) -> None:
         import io
         import sys
         from ai_weather_report import cache as cache_mod
         from ai_weather_report.config import (
-            get_llm_config, get_tts_config, load_config,
+            get_feeds, get_llm_config, get_retention_days, get_tts_config,
+            load_config,
         )
-        from ai_weather_report.pipeline import run_report
+        from ai_weather_report.pipeline import (
+            fetch_and_summarise, fetch_feeds, run_report,
+        )
 
         config = load_config()
         llm_cfg = get_llm_config(config)
         tts_cfg = get_tts_config(config)
+        feeds = get_feeds(config)
+        retention = get_retention_days(config)
 
-        all_articles = cache_mod.load_all_articles()
-        all_articles = [a for a in all_articles if a.get("summary")]
-
-        if not all_articles:
-            self.app.call_from_thread(
-                self.query_one("#reports-status", Static).update,
-                "No cached articles. Run feed update first."
-            )
-            return
+        # Step 1: Fetch feeds first
+        self.app.call_from_thread(
+            self._show_progress, "Fetching RSS feeds...", 0, 1
+        )
 
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         try:
-            report_id = run_report(
+            articles = fetch_feeds(feeds, days=3, max_per_feed=20)
+        except Exception:
+            sys.stderr = old_stderr
+            self.app.call_from_thread(self._finish_generate, False)
+            return
+        finally:
+            sys.stderr = old_stderr
+
+        # Step 2: Summarise new articles
+        if articles:
+            def on_fetch_progress(stage, current, total, detail):
+                if stage == "fetch":
+                    label = f"Fetching article {current + 1}/{total}"
+                elif stage == "summarise":
+                    label = f"Summarising {current + 1}/{total}"
+                else:
+                    return
+                self.app.call_from_thread(
+                    self._show_progress, label, current + 1, total
+                )
+
+            old_stderr = sys.stderr
+            sys.stderr = io.StringIO()
+            try:
+                fetch_and_summarise(articles, llm_cfg, progress_cb=on_fetch_progress)
+                cache_mod.prune(retention)
+            except Exception:
+                pass
+            finally:
+                sys.stderr = old_stderr
+
+        # Step 3: Generate report from all cached articles
+        all_articles = cache_mod.load_all_articles()
+        all_articles = [a for a in all_articles if a.get("summary")]
+
+        if not all_articles:
+            self.app.call_from_thread(self._finish_generate, False)
+            return
+
+        def on_report_progress(stage, current, total, detail):
+            if stage == "editorial":
+                label = "Running editorial pass..."
+            elif stage == "audio":
+                label = f"Generating audio {current + 1}/{total}"
+            elif stage == "done":
+                return
+            else:
+                label = detail or stage
+            self.app.call_from_thread(
+                self._show_progress, label, max(current, 0), max(total, 1)
+            )
+
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            run_report(
                 all_articles, days=3, llm_cfg=llm_cfg,
                 tts_cfg=tts_cfg, audio_format="mp3",
+                progress_cb=on_report_progress,
             )
             success = True
         except Exception:
-            report_id = None
             success = False
         finally:
             sys.stderr = old_stderr
 
-        def finish():
-            self._load_reports()
-            if success:
-                self.query_one("#reports-status", Static).update(
-                    f"Generated report: {report_id}"
-                )
-            else:
-                self.query_one("#reports-status", Static).update(
-                    "Report generation failed"
-                )
+        self.app.call_from_thread(self._finish_generate, success)
 
-        self.app.call_from_thread(finish)
+    def _finish_generate(self, success: bool) -> None:
+        self._generating = False
+        self._hide_progress()
+        self._load_reports()
+        if success:
+            self.query_one("#reports-status", Static).update("Report generated")
+        else:
+            self.query_one("#reports-status", Static).update("Generation failed")
 
     def action_back(self) -> None:
         self.app.pop_screen()

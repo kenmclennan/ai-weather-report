@@ -225,7 +225,8 @@ def split_into_chunks(text: str, max_chars: int = CHUNK_SIZE) -> list[str]:
     return chunks
 
 
-def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str) -> list[bytes]:
+def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str,
+                      progress_cb=None) -> list[bytes]:
     """Generate audio chunks via TTS API."""
     import requests
 
@@ -235,8 +236,11 @@ def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str) -> li
         "Content-Type": "application/json",
     }
 
+    total = len(chunks)
     audio_parts = []
-    for chunk in tqdm(chunks, desc="Generating audio", file=sys.stderr):
+    for i, chunk in enumerate(tqdm(chunks, desc="Generating audio", file=sys.stderr)):
+        if progress_cb:
+            progress_cb("audio", i, total, f"Generating audio {i + 1}/{total}")
         payload = {
             "model": tts_cfg["model"],
             "input": chunk,
@@ -287,13 +291,20 @@ def run_fetch(feeds: dict, days: int, max_per_feed: int, llm_cfg: dict,
 
 def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
                tts_cfg: dict | None = None, audio_format: str = "mp3",
-               text_only: bool = False) -> str:
-    """Generate a report from articles. Returns the report ID."""
+               text_only: bool = False, progress_cb=None) -> str:
+    """Generate a report from articles. Returns the report ID.
+
+    Args:
+        progress_cb: Optional callback(stage, current, total, detail) for progress.
+                     Stages: "editorial", "audio", "done".
+    """
     if not all_articles:
         print("No articles to generate a report from.", file=sys.stderr)
         sys.exit(1)
 
     # Editorial pass
+    if progress_cb:
+        progress_cb("editorial", 0, 1, "Running editorial pass...")
     stories = editorial_pass(all_articles, days, llm_cfg)
     print(f"Editorial selected {len(stories)} stories.\n", file=sys.stderr)
 
@@ -328,7 +339,8 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
         chunks = split_into_chunks(transcript)
         print(f"Split into {len(chunks)} audio chunks.", file=sys.stderr)
 
-        audio_parts = synthesise_chunks(chunks, tts_cfg, audio_format)
+        audio_parts = synthesise_chunks(chunks, tts_cfg, audio_format,
+                                        progress_cb=progress_cb)
         audio_data = b"".join(audio_parts)
         audio_path = reports.save_audio(report_id, audio_data, audio_format)
         audio_file = audio_path.name
@@ -345,6 +357,9 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
         audio_format=audio_format if not text_only else None,
         audio_file=audio_file,
     )
+
+    if progress_cb:
+        progress_cb("done", 1, 1, "")
 
     report_dir = reports.report_dir(report_id)
     print(f"\nOutput in {report_dir}/", file=sys.stderr)

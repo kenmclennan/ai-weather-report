@@ -1,4 +1,4 @@
-"""Report detail screen - view report stories and play audio."""
+"""Report detail screen - view report stories, transcript, links, and play audio."""
 
 import subprocess
 from datetime import datetime
@@ -11,11 +11,12 @@ from textual.containers import Center, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Static
 
+from ai_weather_report import reports
 from ai_weather_report.config import REPORTS_DIR
 
 
 class ReportDetailScreen(Screen):
-    """Full-screen report detail with playback."""
+    """Full-screen report detail with transcript, links, and playback."""
 
     BINDINGS = [
         Binding("p", "play_audio", "Play audio"),
@@ -42,6 +43,13 @@ class ReportDetailScreen(Screen):
         except ValueError:
             date_str = report_id
 
+        # Audio duration
+        duration_str = ""
+        if has_audio:
+            dur = reports.get_audio_duration(report_id)
+            if dur:
+                duration_str = f"  |  Duration: {dur}"
+
         yield Static(
             "[b]AI Weather Report[/b]  [dim]- Report[/dim]",
             id="report-header",
@@ -52,49 +60,50 @@ class ReportDetailScreen(Screen):
                 yield Static(
                     f"{story_count} stories from {article_count} articles  |  "
                     f"Last {days} days  |  "
-                    f"Audio: {'yes' if has_audio else 'no'}",
+                    f"Audio: {'yes' if has_audio else 'no'}"
+                    f"{duration_str}",
                     id="report-info",
                 )
                 yield Static("", id="report-spacer")
-                yield Static(self._load_stories(), id="report-stories")
 
+                # Full transcript
+                transcript = self._load_transcript()
+                yield Static("TRANSCRIPT", id="report-section-header")
+                yield Static("", id="report-spacer2")
+                yield Static(transcript, id="report-transcript", markup=False)
+
+                # Source links
+                links = self._load_links()
+                if links:
+                    yield Static("", id="report-spacer3")
+                    yield Static("SOURCE LINKS", id="report-links-header")
+                    yield Static("", id="report-spacer4")
+                    yield Static(links, id="report-links", markup=False)
+
+        yield Static("", id="report-playback", markup=False)
         hints = []
         if has_audio:
             hints.append("p  Play audio")
-        hints.extend(["t  Open transcript", "Esc  Back"])
-        yield Static("", id="report-playback", markup=False)
+        hints.extend(["t  Open transcript", "Esc  Back", "q  Quit"])
         yield Static(" " + "    ".join(hints), id="report-hint", markup=False)
 
     def on_mount(self) -> None:
         self.query_one("#report-scroll").focus()
         self.query_one("#report-playback").display = False
 
-    def _load_stories(self) -> str:
+    def _load_transcript(self) -> str:
         report_id = self.report.get("id", "")
         transcript_path = REPORTS_DIR / report_id / "transcript.txt"
-
         if not transcript_path.exists():
             return "Transcript not found."
+        return transcript_path.read_text().strip()
 
-        transcript = transcript_path.read_text()
-        lines = transcript.strip().split("\n")
-
-        stories = []
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-            if (i + 1 < len(lines)
-                    and lines[i + 1].strip().startswith("From ")
-                    and not line.startswith("The AI Weather")
-                    and not line.startswith("That's")):
-                stories.append(line)
-
-        if stories:
-            return "Stories:\n\n" + "\n".join(
-                f"  {i+1}. {s}" for i, s in enumerate(stories)
-            )
-        return "Could not parse stories from transcript."
+    def _load_links(self) -> str:
+        report_id = self.report.get("id", "")
+        links_path = REPORTS_DIR / report_id / "links.md"
+        if not links_path.exists():
+            return ""
+        return links_path.read_text().strip()
 
     def action_play_audio(self) -> None:
         audio_file = self.report.get("audio_file")

@@ -95,3 +95,28 @@ def save_audio(report_id: str, audio_data: bytes, audio_format: str) -> Path:
     path = rdir / filename
     path.write_bytes(audio_data)
     return path
+
+
+def get_audio_duration(report_id: str) -> str | None:
+    """Get audio duration using afinfo (macOS). Returns formatted string or None."""
+    import subprocess
+    manifest = load_manifest(report_id)
+    if not manifest or not manifest.get("audio_file"):
+        return None
+    audio_path = report_dir(report_id) / manifest["audio_file"]
+    if not audio_path.exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["afinfo", str(audio_path)],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.split("\n"):
+            if "estimated duration:" in line.lower():
+                secs = float(line.split(":")[-1].strip().split()[0])
+                mins = int(secs // 60)
+                remaining = int(secs % 60)
+                return f"{mins}:{remaining:02d}"
+    except Exception:
+        pass
+    return None

@@ -199,16 +199,37 @@ ReportsListScreen {
 
 ReportsListScreen Center {
     height: 1fr;
+    background: $surface;
 }
 
 #reports-list {
     max-width: 120;
     height: 1fr;
+    background: $surface;
+    scrollbar-size: 0 0;
 }
 
 #reports-footer {
     dock: bottom;
-    height: 2;
+    height: auto;
+    max-height: 5;
+}
+
+#reports-progress-label {
+    height: 1;
+    padding: 0 1;
+    color: $accent;
+    background: $primary-background;
+}
+
+#reports-progress {
+    height: 1;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+#reports-progress Bar {
+    width: 1fr;
 }
 
 #reports-status {
@@ -222,11 +243,6 @@ ReportsListScreen Center {
     height: 1;
     background: $primary-background-darken-1;
     color: $text-muted;
-    padding: 0 1;
-}
-
-ReportListItem {
-    height: 2;
     padding: 0 1;
 }
 
@@ -265,9 +281,19 @@ ReportDetailScreen Center {
     width: 1fr;
 }
 
-#report-stories {
+#report-section-header, #report-links-header {
+    color: $accent;
+    text-style: bold;
     width: 1fr;
-    margin: 1 0;
+}
+
+#report-transcript {
+    width: 1fr;
+}
+
+#report-links {
+    width: 1fr;
+    color: $text-muted;
 }
 
 #report-playback {
