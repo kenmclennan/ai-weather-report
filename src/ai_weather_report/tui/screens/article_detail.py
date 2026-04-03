@@ -5,7 +5,7 @@ from datetime import datetime
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Center, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Static
 
@@ -25,7 +25,6 @@ class ArticleDetailScreen(Screen):
     def compose(self) -> ComposeResult:
         a = self.article
 
-        # Format date
         pub = a.get("published", "")
         if pub:
             try:
@@ -38,23 +37,28 @@ class ArticleDetailScreen(Screen):
 
         source = a.get("source", "Unknown")
         tags = a.get("tags", [])
-        tag_str = "  ".join(f"[{t}]" for t in tags) if tags else "none"
-        reports = a.get("reports", [])
-        report_str = ", ".join(reports) if reports else "Not included in any report"
+        tag_str = "  ".join(f"\\[{t}]" for t in tags) if tags else "none"
+        article_reports = a.get("reports", [])
+        report_str = ", ".join(article_reports) if article_reports else "Not included in any report"
         url = a.get("url", "")
 
-        with VerticalScroll(id="article-scroll"):
-            yield Static(a.get("title", "Untitled"), id="article-title", markup=False)
-            yield Static(f"{source}  |  {pub_str}", id="article-source", markup=False)
-            yield Static("", id="article-spacer")
-            yield Static(a.get("summary", "No summary available."), id="article-summary", markup=False)
-            yield Static("", id="article-spacer2")
-            yield Static(f"Tags: {tag_str}", id="article-tags", markup=False)
-            yield Static(f"Reports: {report_str}", id="article-reports", markup=False)
-            if url:
-                yield Static(f"URL: {url}", id="article-url", markup=False)
+        yield Static(
+            "[b]AI Weather Report[/b]  [dim]- Article[/dim]",
+            id="article-header",
+        )
+        with Center():
+            with VerticalScroll(id="article-scroll"):
+                yield Static(a.get("title", "Untitled"), id="article-title", markup=False)
+                yield Static(f"{source}  |  {pub_str}", id="article-source", markup=False)
+                yield Static("", id="article-spacer")
+                yield Static(a.get("summary", "No summary available."), id="article-summary", markup=False)
+                yield Static("", id="article-spacer2")
+                yield Static(f"Tags: {tag_str}", id="article-tags", markup=False)
+                yield Static(f"Reports: {report_str}", id="article-reports", markup=False)
+                if url:
+                    yield Static(f"URL: {url}", id="article-url", markup=False)
 
-        yield Static(" [o] Open in browser  [Esc] Back", id="article-hint", markup=False)
+        yield Static(" o  Open in browser    Esc  Back", id="article-hint", markup=False)
 
     def on_mount(self) -> None:
         self.query_one("#article-scroll").focus()

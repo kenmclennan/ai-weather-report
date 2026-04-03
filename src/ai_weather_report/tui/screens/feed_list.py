@@ -5,15 +5,24 @@ from datetime import datetime
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Center
 from textual.screen import Screen
-from textual.widgets import Input, Label, ListItem, ListView, Static
+from textual.widgets import Input, ListItem, ListView, Static
+
+from rich.markup import escape as markup_escape
 
 from ai_weather_report import cache
 
 
 class ArticleListItem(ListItem):
     """A single article row in the feed list."""
+
+    DEFAULT_CSS = """
+    ArticleListItem {
+        height: 3;
+        padding: 0 1;
+    }
+    """
 
     def __init__(self, article: dict) -> None:
         super().__init__()
@@ -22,6 +31,7 @@ class ArticleListItem(ListItem):
     def compose(self) -> ComposeResult:
         in_report = bool(self.article.get("reports"))
         indicator = "\u25cf" if in_report else "\u25cb"
+        indicator_color = "$success" if in_report else "$text-disabled"
 
         pub = self.article.get("published", "")
         if pub:
@@ -33,15 +43,16 @@ class ArticleListItem(ListItem):
         else:
             date_str = "     "
 
-        source = self.article.get("source", "")
-        title = self.article.get("title", "Untitled")
+        source = markup_escape(self.article.get("source", ""))
+        title = markup_escape(self.article.get("title", "Untitled"))
         tags = self.article.get("tags", [])
-        tag_str = "  ".join(f"[{t}]" for t in tags[:3]) if tags else ""
+        tag_str = "  ".join(f"\\[{markup_escape(t)}]" for t in tags[:3]) if tags else ""
+
+        title_markup = f"[bold]{title}[/bold]" if in_report else title
 
         yield Static(
-            f" {indicator}  {title}\n"
-            f"    {date_str}  {source}  {tag_str}",
-            markup=False,
+            f"[{indicator_color}]{indicator}[/]  {title_markup}\n"
+            f"    [dim]{date_str}  {source}[/]  [dim italic]{tag_str}[/]",
         )
 
 
@@ -61,8 +72,13 @@ class FeedListScreen(Screen):
         self._filter_visible = False
 
     def compose(self) -> ComposeResult:
+        yield Static(
+            "[b]AI Weather Report[/b]  [dim]- Feed[/dim]",
+            id="feed-header",
+        )
         yield Input(placeholder="Filter articles...", id="filter-input")
-        yield ListView(id="feed-list")
+        with Center():
+            yield ListView(id="feed-list")
         yield Static("", id="feed-hint", markup=False)
         yield Static("Loading...", id="feed-status", markup=False)
 
@@ -109,13 +125,12 @@ class FeedListScreen(Screen):
         parts = [f"{shown}/{total} articles"]
         if in_report:
             parts.append(f"{in_report} in reports")
-        parts.append("\u25cf = in report")
 
         self.query_one("#feed-status", Static).update(" | ".join(parts))
 
     def _update_hint(self) -> None:
         self.query_one("#feed-hint", Static).update(
-            " [/] Filter  [u] Update feed  [Enter] View  [Esc] Back"
+            " /  Filter    u  Update feed    Enter  View    Esc  Back"
         )
 
     @on(ListView.Selected, "#feed-list")
@@ -166,14 +181,13 @@ class FeedListScreen(Screen):
         feeds = get_feeds(config)
         retention = get_retention_days(config)
 
-        # Suppress pipeline stderr output
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         try:
             articles = run_fetch(feeds, days=3, max_per_feed=20,
                                  llm_cfg=llm_cfg, retention_days=retention)
             count = len(articles)
-        except Exception as e:
+        except Exception:
             count = -1
         finally:
             sys.stderr = old_stderr

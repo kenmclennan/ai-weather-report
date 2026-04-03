@@ -5,6 +5,7 @@ from datetime import datetime
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Center
 from textual.screen import Screen
 from textual.widgets import ListItem, ListView, Static
 
@@ -50,7 +51,12 @@ class ReportsListScreen(Screen):
         self._reports: list[dict] = []
 
     def compose(self) -> ComposeResult:
-        yield ListView(id="reports-list")
+        yield Static(
+            "[b]AI Weather Report[/b]  [dim]- Reports[/dim]",
+            id="reports-header",
+        )
+        with Center():
+            yield ListView(id="reports-list")
         yield Static("", id="reports-hint", markup=False)
         yield Static("Loading...", id="reports-status", markup=False)
 
@@ -79,7 +85,7 @@ class ReportsListScreen(Screen):
 
     def _update_hint(self) -> None:
         self.query_one("#reports-hint", Static).update(
-            " [g] Generate new report  [Enter] View  [Esc] Back"
+            " g  Generate new report    Enter  View    Esc  Back"
         )
 
     @on(ListView.Selected, "#reports-list")

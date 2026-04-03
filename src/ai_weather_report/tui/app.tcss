@@ -4,6 +4,34 @@ Screen {
     background: $surface;
 }
 
+/* Shared header style */
+.screen-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 2;
+    text-style: bold;
+}
+
+/* Shared hint bar */
+.hint-bar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-1;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+/* Shared status bar */
+.status-bar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    color: $text;
+    padding: 0 1;
+}
+
 /* === Main Menu === */
 
 MainMenuScreen {
@@ -30,12 +58,25 @@ FeedListScreen {
     layout: vertical;
 }
 
+#feed-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 2;
+}
+
 #filter-input {
     dock: top;
-    margin: 0 1;
+    margin: 0 2;
+}
+
+FeedListScreen Center {
+    height: 1fr;
 }
 
 #feed-list {
+    max-width: 120;
     height: 1fr;
 }
 
@@ -44,6 +85,7 @@ FeedListScreen {
     height: 1;
     background: $primary-background-darken-1;
     color: $text-muted;
+    padding: 0 1;
 }
 
 #feed-status {
@@ -54,18 +96,26 @@ FeedListScreen {
     padding: 0 1;
 }
 
-ArticleListItem {
-    height: 3;
-    padding: 0;
-}
-
 /* === Article Detail === */
 
 ArticleDetailScreen {
     layout: vertical;
 }
 
+#article-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 2;
+}
+
+ArticleDetailScreen Center {
+    height: 1fr;
+}
+
 #article-scroll {
+    max-width: 100;
     height: 1fr;
     padding: 1 2;
 }
@@ -106,6 +156,7 @@ ArticleDetailScreen {
     height: 1;
     background: $primary-background-darken-1;
     color: $text-muted;
+    padding: 0 1;
 }
 
 /* === Reports List === */
@@ -114,7 +165,20 @@ ReportsListScreen {
     layout: vertical;
 }
 
+#reports-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 2;
+}
+
+ReportsListScreen Center {
+    height: 1fr;
+}
+
 #reports-list {
+    max-width: 120;
     height: 1fr;
 }
 
@@ -123,6 +187,7 @@ ReportsListScreen {
     height: 1;
     background: $primary-background-darken-1;
     color: $text-muted;
+    padding: 0 1;
 }
 
 #reports-status {
@@ -135,7 +200,7 @@ ReportsListScreen {
 
 ReportListItem {
     height: 2;
-    padding: 0;
+    padding: 0 1;
 }
 
 /* === Report Detail === */
@@ -144,7 +209,20 @@ ReportDetailScreen {
     layout: vertical;
 }
 
+#report-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 2;
+}
+
+ReportDetailScreen Center {
+    height: 1fr;
+}
+
 #report-scroll {
+    max-width: 100;
     height: 1fr;
     padding: 1 2;
 }
@@ -178,4 +256,5 @@ ReportDetailScreen {
     height: 1;
     background: $primary-background-darken-1;
     color: $text-muted;
+    padding: 0 1;
 }

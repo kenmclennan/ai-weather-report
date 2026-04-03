@@ -7,7 +7,7 @@ from pathlib import Path
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Center, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Static
 
@@ -42,23 +42,28 @@ class ReportDetailScreen(Screen):
         except ValueError:
             date_str = report_id
 
-        with VerticalScroll(id="report-scroll"):
-            yield Static(f"Report: {date_str}", id="report-title")
-            yield Static(
-                f"{story_count} stories from {article_count} articles  |  "
-                f"Last {days} days  |  "
-                f"Audio: {'yes' if has_audio else 'no'}",
-                id="report-info",
-            )
-            yield Static("", id="report-spacer")
-            yield Static(self._load_stories(), id="report-stories")
+        yield Static(
+            "[b]AI Weather Report[/b]  [dim]- Report[/dim]",
+            id="report-header",
+        )
+        with Center():
+            with VerticalScroll(id="report-scroll"):
+                yield Static(f"Report: {date_str}", id="report-title")
+                yield Static(
+                    f"{story_count} stories from {article_count} articles  |  "
+                    f"Last {days} days  |  "
+                    f"Audio: {'yes' if has_audio else 'no'}",
+                    id="report-info",
+                )
+                yield Static("", id="report-spacer")
+                yield Static(self._load_stories(), id="report-stories")
 
         yield Static("", id="report-playback", markup=False)
         hints = []
         if has_audio:
-            hints.append("[p] Play audio")
-        hints.extend(["[t] Open transcript", "[Esc] Back"])
-        yield Static(" " + "  ".join(hints), id="report-hint", markup=False)
+            hints.append("p  Play audio")
+        hints.extend(["t  Open transcript", "Esc  Back"])
+        yield Static(" " + "    ".join(hints), id="report-hint", markup=False)
 
     def on_mount(self) -> None:
         self.query_one("#report-scroll").focus()
