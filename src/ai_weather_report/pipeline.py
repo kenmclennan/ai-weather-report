@@ -176,6 +176,36 @@ def fetch_and_summarise(articles: list[dict], llm_cfg: dict,
 # --- Output generation ---
 
 
+def _fix_tts_capitalisation(text: str) -> str:
+    """Fix common capitalisation issues for TTS pronunciation."""
+    import re
+
+    # Word-boundary replacements for abbreviations and proper nouns
+    fixes = {
+        r"\bai\b": "AI",
+        r"\bapi\b": "API",
+        r"\bapis\b": "APIs",
+        r"\bgpu\b": "GPU",
+        r"\bgpus\b": "GPUs",
+        r"\bllm\b": "LLM",
+        r"\bllms\b": "LLMs",
+        r"\bceo\b": "CEO",
+        r"\bcto\b": "CTO",
+        r"\beu\b": "EU",
+        r"\bopenai\b": "OpenAI",
+        r"\bdeepseek\b": "DeepSeek",
+        r"\bdeepmind\b": "DeepMind",
+        r"\bchatgpt\b": "ChatGPT",
+        r"\bgpt\b": "GPT",
+        r"\bmeta\b": "Meta",
+    }
+
+    for pattern, replacement in fixes.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    return text
+
+
 def build_transcript(stories: list[dict], days: int) -> str:
     """Build the spoken transcript from editorial stories."""
     today = datetime.now().strftime("%B %d, %Y")
@@ -188,7 +218,8 @@ def build_transcript(stories: list[dict], days: int) -> str:
         lines.append(f'{story["body"]}\n')
 
     lines.append(f"That's The AI Weather Report for {today}. Stay informed.")
-    return "\n".join(lines)
+    transcript = "\n".join(lines)
+    return _fix_tts_capitalisation(transcript)
 
 
 def build_links(stories: list[dict]) -> str:

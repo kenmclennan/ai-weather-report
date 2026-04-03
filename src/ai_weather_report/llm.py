@@ -36,10 +36,16 @@ EDITORIAL_SYSTEM = (
     "- Select only the genuinely important developments, not minor updates.\n"
     "- Aim for roughly 8-15 stories depending on how much significant news there is.\n"
     "- The body text should sound natural when read aloud by a text-to-speech voice.\n"
-    "- Do not use abbreviations, special characters, or markdown.\n"
+    "- Do not use special characters or markdown.\n"
     "- Do not start every story with 'In a' or similar repetitive phrasing.\n"
     "- article_indices must reference the index numbers from the input.\n"
-    "- Order stories with the most significant news first."
+    "- Order stories with the most significant news first.\n"
+    "- IMPORTANT for TTS pronunciation: Always use correct capitalisation for proper "
+    "nouns, product names, company names, and abbreviations. Write AI (not ai), "
+    "API (not api), GPU (not gpu), LLM (not llm), CEO (not ceo), US (not us when "
+    "referring to United States), EU (not eu), OpenAI, DeepMind, ChatGPT, GPT, "
+    "Google, Meta, Microsoft, Anthropic, etc. The text-to-speech system relies on "
+    "capitalisation to pronounce these correctly."
 )
 
 

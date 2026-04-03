@@ -84,6 +84,7 @@ def load_config():
     migrate_legacy_config()
     ensure_dirs()
     config = configparser.ConfigParser()
+    config.optionxform = str  # Preserve case in keys (esp. feed names)
     config.read(CONFIG_PATH)
     return config
 
