@@ -139,10 +139,12 @@ class ReportsListScreen(Screen):
     def _do_generate(self) -> None:
         import io
         import sys
+        from datetime import datetime, timezone
         from ai_weather_report import cache as cache_mod
+        from ai_weather_report import reports as reports_mod
         from ai_weather_report.config import (
-            get_feeds, get_llm_config, get_retention_days, get_tts_config,
-            load_config,
+            get_feeds, get_fetch_days, get_llm_config, get_retention_days,
+            get_tts_config, load_config,
         )
         from ai_weather_report.pipeline import (
             fetch_and_summarise, fetch_feeds, run_report,
@@ -153,6 +155,7 @@ class ReportsListScreen(Screen):
         tts_cfg = get_tts_config(config)
         feeds = get_feeds(config)
         retention = get_retention_days(config)
+        fetch_days = get_fetch_days(config)
 
         # Step 1: Fetch feeds first
         self.app.call_from_thread(
@@ -162,7 +165,7 @@ class ReportsListScreen(Screen):
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         try:
-            articles = fetch_feeds(feeds, days=3, max_per_feed=20)
+            articles = fetch_feeds(feeds, days=fetch_days, max_per_feed=20)
         except Exception:
             sys.stderr = old_stderr
             self.app.call_from_thread(self._finish_generate, False)
@@ -193,13 +196,30 @@ class ReportsListScreen(Screen):
             finally:
                 sys.stderr = old_stderr
 
-        # Step 3: Generate report from all cached articles
+        # Step 3: Generate report from articles since last report
         all_articles = cache_mod.load_all_articles()
         all_articles = [a for a in all_articles if a.get("summary")]
 
-        if not all_articles:
+        # Filter to only articles not yet included in any report
+        unreported = [a for a in all_articles if not a.get("reports")]
+        # Use unreported articles if available, otherwise fall back to all
+        report_articles = unreported if unreported else all_articles
+
+        if not report_articles:
             self.app.call_from_thread(self._finish_generate, False)
             return
+
+        # Calculate days span for the editorial prompt
+        last_reports = reports_mod.list_reports()
+        if last_reports:
+            last_created = last_reports[0].get("created_at", "")
+            try:
+                last_dt = datetime.fromisoformat(last_created)
+                days_since = (datetime.now(timezone.utc) - last_dt).days or 1
+            except (ValueError, TypeError):
+                days_since = fetch_days
+        else:
+            days_since = fetch_days
 
         def on_report_progress(stage, current, total, detail):
             if stage == "editorial":
@@ -218,7 +238,7 @@ class ReportsListScreen(Screen):
         sys.stderr = io.StringIO()
         try:
             run_report(
-                all_articles, days=3, llm_cfg=llm_cfg,
+                report_articles, days=days_since, llm_cfg=llm_cfg,
                 tts_cfg=tts_cfg, audio_format="mp3",
                 progress_cb=on_report_progress,
             )

@@ -197,7 +197,8 @@ class FeedListScreen(Screen):
         import io
         import sys
         from ai_weather_report.config import (
-            get_feeds, get_llm_config, get_retention_days, load_config,
+            get_feeds, get_fetch_days, get_llm_config, get_retention_days,
+            load_config,
         )
         from ai_weather_report.pipeline import fetch_feeds, fetch_and_summarise
         from ai_weather_report import cache as cache_mod
@@ -206,6 +207,7 @@ class FeedListScreen(Screen):
         llm_cfg = get_llm_config(config)
         feeds = get_feeds(config)
         retention = get_retention_days(config)
+        fetch_days = get_fetch_days(config)
 
         # Step 1: Fetch RSS feeds
         self.app.call_from_thread(
@@ -215,7 +217,7 @@ class FeedListScreen(Screen):
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         try:
-            articles = fetch_feeds(feeds, days=3, max_per_feed=20)
+            articles = fetch_feeds(feeds, days=fetch_days, max_per_feed=20)
         except Exception:
             sys.stderr = old_stderr
             self.app.call_from_thread(self._finish_update, -1)

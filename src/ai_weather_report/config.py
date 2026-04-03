@@ -58,6 +58,7 @@ LLM_DEFAULTS = {
 
 GENERAL_DEFAULTS = {
     "retention_days": "30",
+    "fetch_days": "3",
 }
 
 TTS_REQUIRED = ("api_url", "api_key", "voice")
@@ -231,6 +232,12 @@ def get_retention_days(config):
     """Get cache retention period in days."""
     return int(config.get("general", "retention_days",
                           fallback=GENERAL_DEFAULTS["retention_days"]))
+
+
+def get_fetch_days(config):
+    """Get how many days back to fetch articles."""
+    return int(config.get("general", "fetch_days",
+                          fallback=GENERAL_DEFAULTS["fetch_days"]))
 
 
 def print_config():
