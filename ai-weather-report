@@ -1,0 +1,673 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["feedparser", "trafilatura", "requests", "tqdm", "anthropic"]
+# ///
+"""ai-weather-report - Generate an AI news audio briefing from RSS feeds."""
+
+import argparse
+import configparser
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+CONFIG_PATH = Path.home() / ".ai-weather-report"
+
+DEFAULT_FEEDS = {
+    # News outlets
+    "Ars Technica AI": "https://arstechnica.com/ai/feed/",
+    "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss",
+    "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
+    "MIT Technology Review": "https://www.technologyreview.com/feed/",
+    # AI company blogs
+    "OpenAI": "https://openai.com/news/rss.xml",
+    "Google DeepMind": "https://deepmind.google/blog/rss.xml",
+    "Hugging Face": "https://huggingface.co/blog/feed.xml",
+}
+
+TTS_DEFAULTS = {
+    "api_url": "https://tts.clu.ninja/v1",
+    "api_key": "",
+    "voice": "af_bella(2)+af_nicole(7)",
+    "speed": "1.1",
+    "model": "kokoro",
+}
+
+LLM_DEFAULTS = {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "api_key": "",
+    "api_url": "",
+}
+
+TTS_REQUIRED = ("api_url", "api_key", "voice")
+CHUNK_SIZE = 1000
+DEFAULT_DAYS = 3
+MAX_ARTICLE_CHARS = 6000
+
+SUMMARY_SYSTEM = (
+    "You are a news analyst. Given a full article, write a 2-3 sentence summary "
+    "capturing the key facts: what happened, who is involved, and why it matters. "
+    "Be factual and concise. No bullet points or formatting. Just the summary."
+)
+
+EDITORIAL_SYSTEM = (
+    "You are the editor of an audio news briefing called The AI Weather Report. "
+    "You will receive a list of article summaries with index numbers, titles, and sources.\n\n"
+    "Your job:\n"
+    "1. Identify the most important and interesting stories.\n"
+    "2. Where multiple articles cover the same news, merge them into one story "
+    "combining the best information from each source.\n"
+    "3. Write a broadcast-style transcript optimised for listening, not reading.\n"
+    "4. Each story needs a short spoken headline, the source attribution, and the news.\n\n"
+    "Return ONLY valid JSON with this structure:\n"
+    '{"stories": [\n'
+    '  {"headline": "short spoken headline",\n'
+    '   "sources": ["Source Name", ...],\n'
+    '   "article_indices": [0, 3, 7],\n'
+    '   "body": "The news text written for audio listening. Two to four sentences."}\n'
+    "]}\n\n"
+    "Guidelines:\n"
+    "- Select only the genuinely important developments, not minor updates.\n"
+    "- Aim for roughly 8-15 stories depending on how much significant news there is.\n"
+    "- The body text should sound natural when read aloud by a text-to-speech voice.\n"
+    "- Do not use abbreviations, special characters, or markdown.\n"
+    "- Do not start every story with 'In a' or similar repetitive phrasing.\n"
+    "- article_indices must reference the index numbers from the input.\n"
+    "- Order stories with the most significant news first."
+)
+
+
+# --- Config ---
+
+
+def load_config():
+    config = configparser.ConfigParser()
+    config.read(CONFIG_PATH)
+    return config
+
+
+def save_config(config):
+    with open(CONFIG_PATH, "w") as f:
+        config.write(f)
+
+
+def needs_setup(config):
+    for key in TTS_REQUIRED:
+        val = config.get("tts", key, fallback="").strip()
+        if not val:
+            return True
+    if not config.get("llm", "api_key", fallback="").strip():
+        return True
+    return False
+
+
+def interactive_setup(config, force=False):
+    print("ai-weather-report config setup", file=sys.stderr)
+    print("-" * 31, file=sys.stderr)
+
+    # TTS section
+    if not config.has_section("tts"):
+        config.add_section("tts")
+    print("\n--- TTS settings ---", file=sys.stderr)
+    for key, default in TTS_DEFAULTS.items():
+        existing = config.get("tts", key, fallback="").strip()
+        if existing and not force:
+            continue
+        display_default = existing if existing else default
+        prompt = f"{key.replace('_', ' ').title()} [{display_default}]: "
+        value = input(prompt).strip()
+        if not value:
+            value = display_default
+        config.set("tts", key, value)
+
+    # LLM section (required)
+    if not config.has_section("llm"):
+        config.add_section("llm")
+    print("\n--- LLM settings (required) ---", file=sys.stderr)
+    for key, default in LLM_DEFAULTS.items():
+        existing = config.get("llm", key, fallback="").strip()
+        if existing and not force:
+            continue
+        display_default = existing if existing else default
+        hint = ""
+        if key == "provider":
+            hint = " (anthropic or openai)"
+        elif key == "api_url":
+            hint = " (leave blank for default)"
+        prompt = f"{key.replace('_', ' ').title()}{hint} [{display_default}]: "
+        value = input(prompt).strip()
+        if not value:
+            value = display_default
+        config.set("llm", key, value)
+
+    # Feeds section
+    if not config.has_section("feeds"):
+        config.add_section("feeds")
+        for name, url in DEFAULT_FEEDS.items():
+            config.set("feeds", name, url)
+        print("\nDefault RSS feeds added. Edit ~/.ai-weather-report to customize.", file=sys.stderr)
+    elif force:
+        print("\nFeeds unchanged. Edit ~/.ai-weather-report to add/remove feeds.", file=sys.stderr)
+
+    save_config(config)
+    print(f"\nConfig saved to {CONFIG_PATH} \u2713\n", file=sys.stderr)
+
+
+def get_tts_config(config, args):
+    result = {}
+    for key, default in TTS_DEFAULTS.items():
+        result[key] = config.get("tts", key, fallback=default)
+    if args.voice:
+        result["voice"] = args.voice
+    if args.speed is not None:
+        result["speed"] = str(args.speed)
+    return result
+
+
+def get_llm_config(config, args):
+    cfg = {}
+    for key, default in LLM_DEFAULTS.items():
+        cfg[key] = config.get("llm", key, fallback=default)
+    if not cfg["api_key"].strip():
+        print("Error: LLM must be configured. Run ai-weather-report --reconfigure", file=sys.stderr)
+        sys.exit(1)
+    if hasattr(args, "llm_model") and args.llm_model:
+        cfg["model"] = args.llm_model
+    if hasattr(args, "llm_provider") and args.llm_provider:
+        cfg["provider"] = args.llm_provider
+    return cfg
+
+
+def get_feeds(config, args):
+    if args.feeds:
+        from urllib.parse import urlparse
+
+        feeds = {}
+        for url in args.feeds:
+            name = urlparse(url).netloc.replace("www.", "")
+            feeds[name] = url
+        return feeds
+    if config.has_section("feeds") and config.options("feeds"):
+        return dict(config.items("feeds"))
+    return dict(DEFAULT_FEEDS)
+
+
+def print_config():
+    config = load_config()
+    print(f"Config file: {CONFIG_PATH}\n")
+
+    print("[TTS]")
+    if not config.has_section("tts"):
+        print("  Not configured.")
+    else:
+        for key in TTS_DEFAULTS:
+            val = config.get("tts", key, fallback="(not set)")
+            if key == "api_key" and val and val != "(not set)":
+                val = val[:4] + "..." + val[-4:] if len(val) > 8 else "****"
+            print(f"  {key}: {val}")
+
+    print("\n[LLM]")
+    if not config.has_section("llm"):
+        print("  Not configured.")
+    else:
+        for key in LLM_DEFAULTS:
+            val = config.get("llm", key, fallback="(not set)")
+            if key == "api_key" and val and val != "(not set)":
+                val = val[:4] + "..." + val[-4:] if len(val) > 8 else "****"
+            if key == "api_url" and not val.strip():
+                val = "(default for provider)"
+            print(f"  {key}: {val}")
+
+    print("\n[Feeds]")
+    if not config.has_section("feeds") or not config.options("feeds"):
+        print("  Using defaults.")
+    else:
+        for name, url in config.items("feeds"):
+            print(f"  {name}: {url}")
+
+
+# --- LLM ---
+
+
+def call_llm(text, system, llm_cfg, max_tokens=4096):
+    provider = llm_cfg["provider"]
+    if provider == "anthropic":
+        return _call_anthropic(text, system, llm_cfg, max_tokens)
+    elif provider == "openai":
+        return _call_openai(text, system, llm_cfg, max_tokens)
+    else:
+        print(f"Error: Unknown LLM provider '{provider}'", file=sys.stderr)
+        sys.exit(1)
+
+
+def _call_anthropic(text, system, llm_cfg, max_tokens):
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=llm_cfg["api_key"])
+    message = client.messages.create(
+        model=llm_cfg["model"],
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": text}],
+    )
+    return message.content[0].text
+
+
+def _call_openai(text, system, llm_cfg, max_tokens):
+    import requests
+
+    base_url = llm_cfg.get("api_url", "").strip()
+    if not base_url:
+        base_url = "https://api.openai.com/v1"
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {llm_cfg['api_key']}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": llm_cfg["model"],
+        "max_tokens": max_tokens,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": text},
+        ],
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=180)
+    except requests.RequestException as e:
+        print(f"\nError: LLM network error - {e}", file=sys.stderr)
+        sys.exit(1)
+    if resp.status_code != 200:
+        print(f"\nError: LLM API returned {resp.status_code}", file=sys.stderr)
+        print(resp.text, file=sys.stderr)
+        sys.exit(1)
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+# --- News pipeline ---
+
+
+def fetch_feeds(feeds_dict, days, max_per_feed):
+    import feedparser
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    articles_by_source = {}
+
+    for name, url in feeds_dict.items():
+        print(f"  Fetching {name}...", file=sys.stderr, end="", flush=True)
+        try:
+            feed = feedparser.parse(url)
+        except Exception as e:
+            print(f" failed ({e})", file=sys.stderr)
+            continue
+
+        if feed.bozo and not feed.entries:
+            print(f" failed (parse error)", file=sys.stderr)
+            continue
+
+        articles = []
+        for entry in feed.entries:
+            published = None
+            for date_field in ("published_parsed", "updated_parsed"):
+                parsed = getattr(entry, date_field, None)
+                if parsed:
+                    published = datetime(*parsed[:6], tzinfo=timezone.utc)
+                    break
+
+            if published and published < cutoff:
+                continue
+
+            articles.append({
+                "title": entry.get("title", "Untitled"),
+                "url": entry.get("link", ""),
+                "published": published,
+                "source": name,
+            })
+
+        articles.sort(
+            key=lambda a: a["published"] or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        articles = articles[:max_per_feed]
+
+        if articles:
+            articles_by_source[name] = articles
+            print(f" {len(articles)} articles", file=sys.stderr)
+        else:
+            print(f" no recent articles", file=sys.stderr)
+
+    return articles_by_source
+
+
+def fetch_article_text(url):
+    import trafilatura
+
+    try:
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            return None
+        return trafilatura.extract(downloaded)
+    except Exception:
+        return None
+
+
+def fetch_all_articles(articles_by_source):
+    from tqdm import tqdm
+
+    total = sum(len(arts) for arts in articles_by_source.values())
+    fetched = 0
+    failed = 0
+
+    all_articles = []
+    for arts in articles_by_source.values():
+        all_articles.extend(arts)
+
+    for article in tqdm(all_articles, desc="Fetching articles", file=sys.stderr):
+        text = fetch_article_text(article["url"])
+        if text:
+            article["text"] = text
+            fetched += 1
+        else:
+            article["text"] = None
+            failed += 1
+
+    # Remove articles with no text
+    for source in list(articles_by_source.keys()):
+        articles_by_source[source] = [a for a in articles_by_source[source] if a["text"]]
+        if not articles_by_source[source]:
+            del articles_by_source[source]
+
+    print(f"Extracted {fetched} of {total} articles ({failed} failed).", file=sys.stderr)
+    return articles_by_source
+
+
+def summarize_articles(all_articles, llm_cfg):
+    """First pass: compress each article into a short summary."""
+    from tqdm import tqdm
+
+    for article in tqdm(all_articles, desc="Summarizing articles", file=sys.stderr):
+        user_text = f'"{article["title"]}"\n\n{article["text"][:MAX_ARTICLE_CHARS]}'
+        try:
+            article["summary"] = call_llm(user_text, SUMMARY_SYSTEM, llm_cfg, max_tokens=512)
+        except Exception as e:
+            print(f"\n  Warning: Failed to summarize '{article['title']}': {e}", file=sys.stderr)
+            article["summary"] = None
+
+    return [a for a in all_articles if a.get("summary")]
+
+
+def editorial_pass(all_articles, days, llm_cfg):
+    """Second pass: merge duplicates, rank importance, produce structured transcript."""
+    # Build the input for the editorial LLM
+    article_list = []
+    for i, article in enumerate(all_articles):
+        article_list.append(
+            f"[{i}] {article['title']}\n"
+            f"    Source: {article['source']}\n"
+            f"    {article['summary']}"
+        )
+
+    user_text = (
+        f"Here are {len(all_articles)} AI news articles from the last {days} days.\n"
+        f"Select the most important stories, merge duplicate coverage, and produce "
+        f"a broadcast transcript.\n\n"
+        + "\n\n".join(article_list)
+    )
+
+    print("Running editorial pass...", file=sys.stderr)
+    raw = call_llm(user_text, EDITORIAL_SYSTEM, llm_cfg, max_tokens=8192)
+
+    # Extract JSON from response (handle markdown code fences)
+    text = raw.strip()
+    if text.startswith("```"):
+        # Strip code fence
+        lines = text.split("\n")
+        lines = lines[1:]  # remove opening ```json or ```
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines)
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse editorial output as JSON: {e}", file=sys.stderr)
+        print("Raw LLM output:", file=sys.stderr)
+        print(raw[:500], file=sys.stderr)
+        sys.exit(1)
+
+    stories = data.get("stories", [])
+    if not stories:
+        print("Error: Editorial pass returned no stories.", file=sys.stderr)
+        sys.exit(1)
+
+    # Resolve article indices to URLs
+    for story in stories:
+        story["urls"] = []
+        for idx in story.get("article_indices", []):
+            if 0 <= idx < len(all_articles):
+                story["urls"].append({
+                    "title": all_articles[idx]["title"],
+                    "url": all_articles[idx]["url"],
+                    "source": all_articles[idx]["source"],
+                })
+
+    return stories
+
+
+# --- Output ---
+
+
+def build_transcript(stories, days):
+    """Build the spoken transcript from editorial stories."""
+    today = datetime.now().strftime("%B %d, %Y")
+    lines = [f"The AI Weather Report for {today}.\n"]
+
+    for story in stories:
+        sources = " and ".join(story["sources"]) if story["sources"] else "multiple sources"
+        lines.append(f'{story["headline"]}.')
+        lines.append(f"From {sources}.")
+        lines.append(f'{story["body"]}\n')
+
+    lines.append(f"That's The AI Weather Report for {today}. Stay informed.")
+    return "\n".join(lines)
+
+
+def build_links(stories):
+    """Build the links file listing sources for each story."""
+    lines = [f"AI Weather Report - Source Links\n"]
+    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+
+    for story in stories:
+        lines.append(f"## {story['headline']}\n")
+        for ref in story.get("urls", []):
+            lines.append(f"- [{ref['source']}] {ref['title']}")
+            lines.append(f"  {ref['url']}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+# --- TTS ---
+
+
+def split_into_chunks(text, max_chars=CHUNK_SIZE):
+    import re
+
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    chunks = []
+    current = ""
+    for sentence in sentences:
+        if len(current) + len(sentence) + 1 > max_chars and current:
+            chunks.append(current.strip())
+            current = sentence
+        else:
+            current = f"{current} {sentence}" if current else sentence
+    if current.strip():
+        chunks.append(current.strip())
+    return chunks
+
+
+def synthesize_chunks(chunks, cfg, audio_format):
+    import requests
+    from tqdm import tqdm
+
+    url = f"{cfg['api_url'].rstrip('/')}/audio/speech"
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type": "application/json",
+    }
+
+    audio_parts = []
+    for chunk in tqdm(chunks, desc="Generating audio", file=sys.stderr):
+        payload = {
+            "model": cfg["model"],
+            "input": chunk,
+            "voice": cfg["voice"],
+            "response_format": audio_format,
+            "speed": float(cfg["speed"]),
+        }
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=120)
+        except requests.RequestException as e:
+            print(f"\nError: TTS network error - {e}", file=sys.stderr)
+            sys.exit(1)
+
+        if resp.status_code != 200:
+            print(f"\nError: TTS API returned {resp.status_code}", file=sys.stderr)
+            print(resp.text, file=sys.stderr)
+            sys.exit(1)
+
+        audio_parts.append(resp.content)
+
+    return audio_parts
+
+
+# --- Main ---
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="ai-weather-report",
+        description="Generate an AI news audio briefing from RSS feeds.",
+    )
+    parser.add_argument("-o", "--output-dir", help="Output directory (default: ai-weather-YYYY-MM-DD-HHMM)")
+    parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help="Days to look back (default: 3)")
+    parser.add_argument("--text-only", action="store_true", help="Generate transcript only (no audio)")
+    parser.add_argument(
+        "--format",
+        choices=["mp3", "wav", "opus", "flac"],
+        default="mp3",
+        help="Audio format (default: mp3)",
+    )
+    parser.add_argument("--voice", help="Override TTS voice")
+    parser.add_argument("--speed", type=float, help="Override TTS speed")
+    parser.add_argument("--feeds", nargs="+", help="Override feed URLs")
+    parser.add_argument("--max-articles", type=int, default=20, help="Max articles per feed (default: 20)")
+    parser.add_argument("--llm-model", help="Override LLM model")
+    parser.add_argument("--llm-provider", choices=["anthropic", "openai"], help="Override LLM provider")
+    parser.add_argument("--config", action="store_true", help="Print current config and exit")
+    parser.add_argument("--reconfigure", action="store_true", help="Force interactive config setup")
+
+    args = parser.parse_args()
+
+    if args.config:
+        print_config()
+        sys.exit(0)
+
+    config = load_config()
+
+    if args.reconfigure or needs_setup(config):
+        interactive_setup(config, force=args.reconfigure)
+        config = load_config()
+        if args.reconfigure and not any([args.text_only, args.output_dir]):
+            sys.exit(0)
+
+    tts_cfg = get_tts_config(config, args)
+    llm_cfg = get_llm_config(config, args)
+    feeds = get_feeds(config, args)
+
+    # Fetch RSS feeds
+    print(f"\nFetching feeds (last {args.days} days)...", file=sys.stderr)
+    articles_by_source = fetch_feeds(feeds, args.days, args.max_articles)
+
+    total_articles = sum(len(a) for a in articles_by_source.values())
+    if total_articles == 0:
+        print(f"No articles found in the last {args.days} days.", file=sys.stderr)
+        sys.exit(0)
+
+    print(f"Found {total_articles} articles from {len(articles_by_source)} sources.\n", file=sys.stderr)
+
+    # Fetch full article text
+    articles_by_source = fetch_all_articles(articles_by_source)
+    if not articles_by_source:
+        print("Could not extract text from any articles.", file=sys.stderr)
+        sys.exit(1)
+
+    # Flatten to a single list for the two-pass pipeline
+    all_articles = []
+    for arts in articles_by_source.values():
+        all_articles.extend(arts)
+
+    # Pass 1: summarize each article
+    all_articles = summarize_articles(all_articles, llm_cfg)
+    if not all_articles:
+        print("Failed to summarize any articles.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Summarized {len(all_articles)} articles.", file=sys.stderr)
+
+    # Pass 2: editorial - merge, rank, produce transcript structure
+    stories = editorial_pass(all_articles, args.days, llm_cfg)
+    print(f"Editorial selected {len(stories)} stories.\n", file=sys.stderr)
+
+    # Build outputs
+    transcript = build_transcript(stories, args.days)
+    links = build_links(stories)
+
+    # Create output directory
+    if args.output_dir:
+        out_dir = Path(args.output_dir)
+    else:
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H%M")
+        out_dir = Path(f"ai-weather-{timestamp}")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write transcript
+    transcript_path = out_dir / "transcript.txt"
+    transcript_path.write_text(transcript)
+    print(f"Transcript: {transcript_path}", file=sys.stderr)
+
+    # Write links
+    links_path = out_dir / "links.md"
+    links_path.write_text(links)
+    print(f"Links:      {links_path}", file=sys.stderr)
+
+    if args.text_only:
+        print(f"\n\u2713 Output in {out_dir}/")
+        sys.exit(0)
+
+    # TTS
+    chunks = split_into_chunks(transcript)
+    print(f"Split into {len(chunks)} audio chunks.", file=sys.stderr)
+
+    audio_parts = synthesize_chunks(chunks, tts_cfg, args.format)
+
+    audio_path = out_dir / f"weather-report.{args.format}"
+    with open(audio_path, "wb") as f:
+        for part in audio_parts:
+            f.write(part)
+
+    total_bytes = sum(len(p) for p in audio_parts)
+    size_mb = total_bytes / (1024 * 1024)
+    print(f"Audio:      {audio_path} ({size_mb:.1f}MB)", file=sys.stderr)
+
+    print(f"\n\u2713 Output in {out_dir}/")
+
+
+if __name__ == "__main__":
+    main()
