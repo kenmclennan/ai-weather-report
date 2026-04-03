@@ -14,15 +14,28 @@ REPORTS_DIR = DATA_DIR / "reports"
 LEGACY_CONFIG_PATH = Path.home() / ".ai-weather-report"
 
 DEFAULT_FEEDS = {
+    # News outlets
     "Ars Technica AI": "https://arstechnica.com/ai/feed/",
     "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
     "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss",
     "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
     "MIT Technology Review": "https://www.technologyreview.com/feed/",
+    # AI company blogs
     "OpenAI": "https://openai.com/news/rss.xml",
     "Google DeepMind": "https://deepmind.google/blog/rss.xml",
     "Hugging Face": "https://huggingface.co/blog/feed.xml",
+    # Dev tools & engineering
+    "Simon Willison": "https://simonwillison.net/atom/everything/",
+    "The Pragmatic Engineer": "https://newsletter.pragmaticengineer.com/feed",
+    "GitHub AI & ML": "https://github.blog/ai-and-ml/feed/",
+    # AI research (accessible)
+    "Import AI": "https://importai.substack.com/feed",
+    "Ahead of AI": "https://magazine.sebastianraschka.com/feed",
+    "The Gradient": "https://thegradientpub.substack.com/feed",
+    # Enterprise adoption
+    "Sequoia Capital": "https://www.sequoiacap.com/feed/",
+    "a16z": "https://www.a16z.news/feed",
 }
 
 TTS_DEFAULTS = {
