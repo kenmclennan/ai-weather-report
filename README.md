@@ -16,9 +16,10 @@ Fetches recent AI news, summarises articles with an LLM, runs an editorial pass 
 ## Install
 
 ```bash
-cd projects/ai-weather-report
-uv venv && uv pip install -e .
+uv tool install -e projects/ai-weather-report
 ```
+
+This puts `ai-weather-report` on your PATH globally.
 
 ## Usage
 
