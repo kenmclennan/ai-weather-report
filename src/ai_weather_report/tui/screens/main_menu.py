@@ -8,12 +8,12 @@ from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
 TITLE_ART = "\n".join([
-    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    "\u2500" * 32,
     "",
-    "    A I   W E A T H E R",
-    "        R E P O R T",
+    "A I   W E A T H E R",
+    "R E P O R T",
     "",
-    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    "\u2500" * 32,
 ])
 
 MENU_OPTIONS = [

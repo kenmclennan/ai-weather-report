@@ -41,7 +41,7 @@ MainMenuScreen {
 #ascii-title {
     text-align: center;
     color: $accent;
-    width: auto;
+    width: 40;
 }
 
 #menu-options {
