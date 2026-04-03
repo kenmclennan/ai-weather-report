@@ -16,11 +16,8 @@ Fetches recent AI news, summarises articles with an LLM, runs an editorial pass 
 ## Install
 
 ```bash
-# With uv
-uv pip install -e .
-
-# Or with pip
-pip install -e .
+cd projects/ai-weather-report
+uv venv && uv pip install -e .
 ```
 
 ## Usage
