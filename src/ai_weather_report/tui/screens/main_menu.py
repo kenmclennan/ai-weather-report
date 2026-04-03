@@ -7,24 +7,24 @@ from textual.screen import Screen
 from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
-TITLE_ART = r"""
+TITLE_ART = """\
      _    ___  __        __         _   _
-    / \  |_ _| \ \      / /__  __ _| |_| |__   ___ _ __
-   / _ \  | |   \ \ /\ / / _ \/ _` | __| '_ \ / _ \ '__|
-  / ___ \ | |    \ V  V /  __/ (_| | |_| | | |  __/ |
- /_/   \_\___|    \_/\_/ \___|\__,_|\__|_| |_|\___|_|
+    / \\  |_ _| \\ \\      / /__  __ _| |_| |__   ___ _ __
+   / _ \\  | |   \\ \\ /\\ / / _ \\/ _` | __| '_ \\ / _ \\ '__|
+  / ___ \\ | |    \\ V  V /  __/ (_| | |_| | | |  __/ |
+ /_/   \\_\\___|    \\_/\\_/ \\___|\\__,_|\\__|_| |_|\\___|_|
                   ____                       _
-                 |  _ \ ___ _ __   ___  _ __| |_
-                 | |_) / _ \ '_ \ / _ \| '__| __|
+                 |  _ \\ ___ _ __   ___  _ __| |_
+                 | |_) / _ \\ '_ \\ / _ \\| '__| __|
                  |  _ <  __/ |_) | (_) | |  | |_
-                 |_| \_\___| .__/ \___/|_|   \__|
-                           |_|
-"""
+                 |_| \\_\\___| .__/ \\___/|_|   \\__|
+                           |_|"""
 
 MENU_OPTIONS = [
     ("feed", "Feed"),
     ("reports", "Weather Reports"),
     ("config", "Config"),
+    ("quit", "Quit"),
 ]
 
 
@@ -38,7 +38,7 @@ class MainMenuScreen(Screen):
     def compose(self) -> ComposeResult:
         with Middle():
             with Center():
-                yield Static(TITLE_ART, id="ascii-title")
+                yield Static(TITLE_ART, id="ascii-title", markup=False)
             with Center():
                 yield OptionList(
                     *[Option(label, id=oid) for oid, label in MENU_OPTIONS],
@@ -60,11 +60,11 @@ class MainMenuScreen(Screen):
             from ai_weather_report.tui.screens.reports_list import ReportsListScreen
             self.app.push_screen(ReportsListScreen())
         elif option_id == "config":
-            from ai_weather_report.config import print_config
-            # For now, just show config in a notification
             import subprocess
             from ai_weather_report.config import CONFIG_PATH
             subprocess.Popen(["open", str(CONFIG_PATH)])
+        elif option_id == "quit":
+            self.app.exit()
 
     def action_quit_app(self) -> None:
         self.app.exit()
