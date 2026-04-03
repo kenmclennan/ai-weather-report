@@ -9,6 +9,7 @@ dependencies = [
     "requests",
     "tqdm",
     "anthropic",
+    "textual>=3.0",
 ]
 
 [project.scripts]

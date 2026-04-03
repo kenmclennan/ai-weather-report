@@ -117,6 +117,13 @@ def cmd_reports_list(args):
         print(f"{r['id']:<20} {r['story_count']:>8} {r['article_count']:>9} {audio:<10}")
 
 
+def cmd_tui(args):
+    """Launch the TUI."""
+    from ai_weather_report.tui.app import WeatherReportApp
+    app = WeatherReportApp()
+    app.run()
+
+
 def cmd_config(args):
     """Print current configuration."""
     print_config()
@@ -186,6 +193,10 @@ def main():
     _add_common_args(p_report)
     _add_output_args(p_report)
     p_report.set_defaults(func=cmd_report)
+
+    # tui
+    p_tui = subparsers.add_parser("tui", help="Launch interactive TUI")
+    p_tui.set_defaults(func=cmd_tui)
 
     # cache-stats
     p_stats = subparsers.add_parser("cache-stats", help="Show cache statistics")

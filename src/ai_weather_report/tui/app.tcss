@@ -1,0 +1,199 @@
+/* Main app styles */
+
+Screen {
+    background: $surface;
+}
+
+/* Feed tab */
+
+FeedTab {
+    height: 1fr;
+}
+
+FeedTab Horizontal {
+    height: 1fr;
+}
+
+#article-list-pane {
+    width: 1fr;
+    min-width: 30;
+    border-right: tall $primary-background;
+}
+
+#article-detail-pane {
+    width: 2fr;
+    min-width: 40;
+}
+
+#search-bar {
+    dock: top;
+    height: 3;
+    padding: 0 1;
+}
+
+#search-input {
+    width: 1fr;
+}
+
+#filter-label {
+    width: auto;
+    padding: 1 1 0 0;
+    color: $text-muted;
+}
+
+ArticleListItem {
+    height: 3;
+    padding: 0 1;
+}
+
+ArticleListItem:hover {
+    background: $boost;
+}
+
+ArticleListItem.--highlight {
+    background: $accent;
+}
+
+.article-title {
+    width: 1fr;
+    text-style: bold;
+}
+
+.article-meta {
+    width: 1fr;
+    color: $text-muted;
+}
+
+.article-indicator {
+    width: 2;
+    color: $success;
+}
+
+.article-indicator-unused {
+    width: 2;
+    color: $text-muted;
+}
+
+#detail-title {
+    text-style: bold;
+    width: 1fr;
+    padding: 1 1 0 1;
+}
+
+#detail-summary {
+    padding: 1;
+    width: 1fr;
+}
+
+#detail-meta {
+    padding: 0 1 1 1;
+    color: $text-muted;
+    width: 1fr;
+}
+
+#detail-tags {
+    padding: 0 1;
+    width: 1fr;
+}
+
+#detail-reports {
+    padding: 0 1 1 1;
+    color: $text-muted;
+    width: 1fr;
+}
+
+#detail-empty {
+    padding: 2;
+    color: $text-muted;
+    text-align: center;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    background: $primary-background;
+    color: $text;
+}
+
+.tag {
+    color: $accent;
+}
+
+/* Reports tab */
+
+ReportsTab {
+    height: 1fr;
+}
+
+ReportsTab Horizontal {
+    height: 1fr;
+}
+
+#report-list-pane {
+    width: 1fr;
+    min-width: 30;
+    border-right: tall $primary-background;
+}
+
+#report-detail-pane {
+    width: 2fr;
+    min-width: 40;
+}
+
+ReportListItem {
+    height: 2;
+    padding: 0 1;
+}
+
+ReportListItem:hover {
+    background: $boost;
+}
+
+ReportListItem.--highlight {
+    background: $accent;
+}
+
+.report-title {
+    text-style: bold;
+}
+
+.report-meta {
+    color: $text-muted;
+}
+
+#report-detail-title {
+    text-style: bold;
+    padding: 1;
+}
+
+#report-detail-info {
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#report-detail-stories {
+    padding: 1;
+}
+
+#report-detail-empty {
+    padding: 2;
+    color: $text-muted;
+    text-align: center;
+}
+
+#report-status-bar {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    background: $primary-background;
+    color: $text;
+}
+
+#playback-bar {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    background: $primary-background-darken-1;
+    color: $text;
+}
