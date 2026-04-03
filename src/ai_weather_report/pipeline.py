@@ -256,9 +256,14 @@ def split_into_chunks(text: str, max_chars: int = CHUNK_SIZE) -> list[str]:
     return chunks
 
 
+class TTSError(Exception):
+    """Raised when TTS synthesis fails."""
+    pass
+
+
 def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str,
                       progress_cb=None) -> list[bytes]:
-    """Generate audio chunks via TTS API."""
+    """Generate audio chunks via TTS API. Raises TTSError on failure."""
     import requests
 
     url = f"{tts_cfg['api_url'].rstrip('/')}/audio/speech"
@@ -282,13 +287,10 @@ def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str,
         try:
             resp = requests.post(url, json=payload, headers=headers, timeout=120)
         except requests.RequestException as e:
-            print(f"\nError: TTS network error - {e}", file=sys.stderr)
-            sys.exit(1)
+            raise TTSError(f"TTS network error: {e}")
 
         if resp.status_code != 200:
-            print(f"\nError: TTS API returned {resp.status_code}", file=sys.stderr)
-            print(resp.text, file=sys.stderr)
-            sys.exit(1)
+            raise TTSError(f"TTS API returned {resp.status_code}")
 
         audio_parts.append(resp.content)
 
@@ -322,8 +324,10 @@ def run_fetch(feeds: dict, days: int, max_per_feed: int, llm_cfg: dict,
 
 def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
                tts_cfg: dict | None = None, audio_format: str = "mp3",
-               text_only: bool = False, progress_cb=None) -> str:
-    """Generate a report from articles. Returns the report ID.
+               text_only: bool = False, progress_cb=None) -> dict:
+    """Generate a report from articles.
+
+    Returns a dict with: report_id, tts_error (str or None).
 
     Args:
         progress_cb: Optional callback(stage, current, total, detail) for progress.
@@ -366,18 +370,23 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
         used_hashes.append(cache.url_hash(url))
 
     audio_file = None
+    tts_error = None
     if not text_only and tts_cfg:
         chunks = split_into_chunks(transcript)
         print(f"Split into {len(chunks)} audio chunks.", file=sys.stderr)
 
-        audio_parts = synthesise_chunks(chunks, tts_cfg, audio_format,
-                                        progress_cb=progress_cb)
-        audio_data = b"".join(audio_parts)
-        audio_path = reports.save_audio(report_id, audio_data, audio_format)
-        audio_file = audio_path.name
+        try:
+            audio_parts = synthesise_chunks(chunks, tts_cfg, audio_format,
+                                            progress_cb=progress_cb)
+            audio_data = b"".join(audio_parts)
+            audio_path = reports.save_audio(report_id, audio_data, audio_format)
+            audio_file = audio_path.name
 
-        size_mb = len(audio_data) / (1024 * 1024)
-        print(f"Audio:      {audio_path} ({size_mb:.1f}MB)", file=sys.stderr)
+            size_mb = len(audio_data) / (1024 * 1024)
+            print(f"Audio:      {audio_path} ({size_mb:.1f}MB)", file=sys.stderr)
+        except TTSError as e:
+            tts_error = str(e)
+            print(f"TTS failed: {e} - report saved without audio", file=sys.stderr)
 
     # Save manifest
     reports.save_manifest(
@@ -385,7 +394,7 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
         articles_used=used_hashes,
         story_count=len(stories),
         days_back=days,
-        audio_format=audio_format if not text_only else None,
+        audio_format=audio_format if audio_file else None,
         audio_file=audio_file,
     )
 
@@ -394,4 +403,4 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
 
     report_dir = reports.report_dir(report_id)
     print(f"\nOutput in {report_dir}/", file=sys.stderr)
-    return report_id
+    return {"report_id": report_id, "tts_error": tts_error}

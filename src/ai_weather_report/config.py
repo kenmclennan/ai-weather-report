@@ -59,6 +59,9 @@ LLM_DEFAULTS = {
 GENERAL_DEFAULTS = {
     "retention_days": "30",
     "fetch_days": "3",
+    "auto_report": "true",
+    "schedule_time": "06:00",
+    "notify": "true",
 }
 
 TTS_REQUIRED = ("api_url", "api_key", "voice")
@@ -238,6 +241,26 @@ def get_fetch_days(config):
     """Get how many days back to fetch articles."""
     return int(config.get("general", "fetch_days",
                           fallback=GENERAL_DEFAULTS["fetch_days"]))
+
+
+def get_auto_report(config):
+    """Whether to automatically generate a report after fetching."""
+    val = config.get("general", "auto_report",
+                     fallback=GENERAL_DEFAULTS["auto_report"])
+    return val.lower() in ("true", "yes", "1")
+
+
+def get_schedule_time(config):
+    """Get the scheduled time for the daemon (HH:MM)."""
+    return config.get("general", "schedule_time",
+                      fallback=GENERAL_DEFAULTS["schedule_time"])
+
+
+def get_notify(config):
+    """Whether to send macOS notifications."""
+    val = config.get("general", "notify",
+                     fallback=GENERAL_DEFAULTS["notify"])
+    return val.lower() in ("true", "yes", "1")
 
 
 def print_config():

@@ -237,25 +237,37 @@ class ReportsListScreen(Screen):
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         try:
-            run_report(
+            result = run_report(
                 report_articles, days=days_since, llm_cfg=llm_cfg,
                 tts_cfg=tts_cfg, audio_format="mp3",
                 progress_cb=on_report_progress,
             )
-            success = True
+            tts_error = result.get("tts_error")
         except Exception:
-            success = False
+            result = None
+            tts_error = None
         finally:
             sys.stderr = old_stderr
 
-        self.app.call_from_thread(self._finish_generate, success)
+        self.app.call_from_thread(self._finish_generate, result, tts_error)
 
-    def _finish_generate(self, success: bool) -> None:
+    def _finish_generate(self, result: dict | None, tts_error: str | None) -> None:
         self._generating = False
         self._hide_progress()
         self._load_reports()
-        if success:
-            self.query_one("#reports-status", Static).update("Report generated")
+        if result:
+            if tts_error:
+                self.app.notify(
+                    f"TTS unavailable: {tts_error}\nReport saved without audio.",
+                    title="TTS Failed",
+                    severity="warning",
+                    timeout=10,
+                )
+                self.query_one("#reports-status", Static).update(
+                    f"Report generated (no audio - TTS failed)"
+                )
+            else:
+                self.query_one("#reports-status", Static).update("Report generated")
         else:
             self.query_one("#reports-status", Static).update("Generation failed")
 

@@ -33,13 +33,15 @@ def cmd_run(args):
     if not all_articles:
         sys.exit(0)
 
-    report_id = run_report(
+    result = run_report(
         all_articles, args.days, llm_cfg,
         tts_cfg=tts_cfg if not args.text_only else None,
         audio_format=args.format,
         text_only=args.text_only,
     )
-    print(f"\nReport: {report_id}")
+    print(f"\nReport: {result['report_id']}")
+    if result.get("tts_error"):
+        print(f"Warning: TTS failed - {result['tts_error']}", file=sys.stderr)
 
 
 def cmd_fetch(args):
@@ -71,13 +73,15 @@ def cmd_report(args):
         sys.exit(1)
 
     print(f"Generating report from {len(all_articles)} cached articles...", file=sys.stderr)
-    report_id = run_report(
+    result = run_report(
         all_articles, args.days, llm_cfg,
         tts_cfg=tts_cfg if not args.text_only else None,
         audio_format=args.format,
         text_only=args.text_only,
     )
-    print(f"\nReport: {report_id}")
+    print(f"\nReport: {result['report_id']}")
+    if result.get("tts_error"):
+        print(f"Warning: TTS failed - {result['tts_error']}", file=sys.stderr)
 
 
 def cmd_cache_stats(args):
@@ -213,6 +217,32 @@ def main():
     # reconfigure
     p_reconfig = subparsers.add_parser("reconfigure", help="Re-run interactive setup")
     p_reconfig.set_defaults(func=cmd_reconfigure)
+
+    # daemon
+    p_daemon = subparsers.add_parser("daemon", help="Manage the background scheduler")
+    daemon_sub = p_daemon.add_subparsers(dest="daemon_command")
+
+    p_daemon_run = daemon_sub.add_parser("run", help="Run fetch + optional report now")
+    p_daemon_run.set_defaults(func=lambda args: __import__(
+        "ai_weather_report.daemon", fromlist=["run_daemon"]).run_daemon())
+
+    p_daemon_install = daemon_sub.add_parser("install", help="Install launchd scheduler")
+    p_daemon_install.set_defaults(func=lambda args: __import__(
+        "ai_weather_report.daemon", fromlist=["install_daemon"]).install_daemon())
+
+    p_daemon_uninstall = daemon_sub.add_parser("uninstall", help="Remove launchd scheduler")
+    p_daemon_uninstall.set_defaults(func=lambda args: __import__(
+        "ai_weather_report.daemon", fromlist=["uninstall_daemon"]).uninstall_daemon())
+
+    p_daemon_status = daemon_sub.add_parser("status", help="Show scheduler status")
+    p_daemon_status.set_defaults(func=lambda args: __import__(
+        "ai_weather_report.daemon", fromlist=["status_daemon"]).status_daemon())
+
+    # Default: show help if just 'daemon' with no subcommand
+    p_daemon.set_defaults(func=lambda args: (
+        __import__("ai_weather_report.daemon", fromlist=["status_daemon"]).status_daemon()
+        if not args.daemon_command else None
+    ))
 
     args = parser.parse_args()
 
