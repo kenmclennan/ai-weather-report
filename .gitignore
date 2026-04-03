@@ -1,10 +1,10 @@
-# Output directories
-ai-weather-*/
-
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
 .venv/
+dist/
+build/
 
 # OS
 .DS_Store

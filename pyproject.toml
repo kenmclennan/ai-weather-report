@@ -1,0 +1,19 @@
+[project]
+name = "ai-weather-report"
+version = "0.2.0"
+description = "Generate an AI news audio briefing from RSS feeds"
+requires-python = ">=3.10"
+dependencies = [
+    "feedparser",
+    "trafilatura",
+    "requests",
+    "tqdm",
+    "anthropic",
+]
+
+[project.scripts]
+ai-weather-report = "ai_weather_report.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
