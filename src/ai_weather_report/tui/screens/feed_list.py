@@ -19,8 +19,8 @@ class ArticleListItem(ListItem):
 
     DEFAULT_CSS = """
     ArticleListItem {
-        height: 3;
-        padding: 0 1;
+        height: 4;
+        padding: 0 2;
     }
     """
 
@@ -52,7 +52,8 @@ class ArticleListItem(ListItem):
 
         yield Static(
             f"[{indicator_color}]{indicator}[/]  {title_markup}\n"
-            f"    [dim]{date_str}  {source}[/]  [dim italic]{tag_str}[/]",
+            f"    [dim]{date_str}  \u2022  {source}[/]\n"
+            f"    [dim italic]{tag_str}[/]",
         )
 
 
