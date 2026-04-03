@@ -58,11 +58,11 @@ class ReportDetailScreen(Screen):
                 yield Static("", id="report-spacer")
                 yield Static(self._load_stories(), id="report-stories")
 
-        yield Static("", id="report-playback", markup=False)
         hints = []
         if has_audio:
             hints.append("p  Play audio")
         hints.extend(["t  Open transcript", "Esc  Back"])
+        yield Static("", id="report-playback", markup=False)
         yield Static(" " + "    ".join(hints), id="report-hint", markup=False)
 
     def on_mount(self) -> None:

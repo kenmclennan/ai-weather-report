@@ -80,19 +80,22 @@ FeedListScreen Center {
     height: 1fr;
 }
 
-#feed-hint {
+#feed-footer {
     dock: bottom;
-    height: 1;
-    background: $primary-background-darken-1;
-    color: $text-muted;
-    padding: 0 1;
+    height: 2;
 }
 
 #feed-status {
-    dock: bottom;
     height: 1;
     background: $primary-background;
     color: $text;
+    padding: 0 1;
+}
+
+#feed-hint {
+    height: 1;
+    background: $primary-background-darken-1;
+    color: $text-muted;
     padding: 0 1;
 }
 
@@ -182,19 +185,22 @@ ReportsListScreen Center {
     height: 1fr;
 }
 
-#reports-hint {
+#reports-footer {
     dock: bottom;
-    height: 1;
-    background: $primary-background-darken-1;
-    color: $text-muted;
-    padding: 0 1;
+    height: 2;
 }
 
 #reports-status {
-    dock: bottom;
     height: 1;
     background: $primary-background;
     color: $text;
+    padding: 0 1;
+}
+
+#reports-hint {
+    height: 1;
+    background: $primary-background-darken-1;
+    color: $text-muted;
     padding: 0 1;
 }
 

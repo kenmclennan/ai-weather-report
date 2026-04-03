@@ -5,7 +5,7 @@ from datetime import datetime
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center
+from textual.containers import Center, Vertical
 from textual.screen import Screen
 from textual.widgets import ListItem, ListView, Static
 
@@ -57,8 +57,9 @@ class ReportsListScreen(Screen):
         )
         with Center():
             yield ListView(id="reports-list")
-        yield Static("", id="reports-hint", markup=False)
-        yield Static("Loading...", id="reports-status", markup=False)
+        with Vertical(id="reports-footer"):
+            yield Static("Loading...", id="reports-status", markup=False)
+            yield Static("", id="reports-hint", markup=False)
 
     def on_mount(self) -> None:
         self._load_reports()

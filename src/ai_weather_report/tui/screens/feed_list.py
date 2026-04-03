@@ -5,7 +5,7 @@ from datetime import datetime
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center
+from textual.containers import Center, Vertical
 from textual.screen import Screen
 from textual.widgets import Input, ListItem, ListView, Static
 
@@ -79,8 +79,9 @@ class FeedListScreen(Screen):
         yield Input(placeholder="Filter articles...", id="filter-input")
         with Center():
             yield ListView(id="feed-list")
-        yield Static("", id="feed-hint", markup=False)
-        yield Static("Loading...", id="feed-status", markup=False)
+        with Vertical(id="feed-footer"):
+            yield Static("Loading...", id="feed-status", markup=False)
+            yield Static("", id="feed-hint", markup=False)
 
     def on_mount(self) -> None:
         self.query_one("#filter-input").display = False
