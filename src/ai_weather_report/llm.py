@@ -7,6 +7,12 @@ import requests
 
 MAX_ARTICLE_CHARS = 6000
 
+
+class LLMError(Exception):
+    """Raised when an LLM call fails."""
+    pass
+
+
 SUMMARY_SYSTEM = (
     "You are a news analyst. Given a full article:\n"
     "1. Write a 2-3 sentence summary capturing the key facts: what happened, "
@@ -50,15 +56,14 @@ EDITORIAL_SYSTEM = (
 
 
 def call_llm(text: str, system: str, llm_cfg: dict, max_tokens: int = 4096) -> str:
-    """Call the configured LLM provider."""
+    """Call the configured LLM provider. Raises LLMError on failure."""
     provider = llm_cfg["provider"]
     if provider == "anthropic":
         return _call_anthropic(text, system, llm_cfg, max_tokens)
     elif provider == "openai":
         return _call_openai(text, system, llm_cfg, max_tokens)
     else:
-        print(f"Error: Unknown LLM provider '{provider}'", file=sys.stderr)
-        sys.exit(1)
+        raise LLMError(f"Unknown LLM provider '{provider}'")
 
 
 def _call_anthropic(text, system, llm_cfg, max_tokens):
@@ -94,12 +99,9 @@ def _call_openai(text, system, llm_cfg, max_tokens):
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=180)
     except requests.RequestException as e:
-        print(f"\nError: LLM network error - {e}", file=sys.stderr)
-        sys.exit(1)
+        raise LLMError(f"LLM network error: {e}")
     if resp.status_code != 200:
-        print(f"\nError: LLM API returned {resp.status_code}", file=sys.stderr)
-        print(resp.text, file=sys.stderr)
-        sys.exit(1)
+        raise LLMError(f"LLM API returned {resp.status_code}: {resp.text[:200]}")
     return resp.json()["choices"][0]["message"]["content"]
 
 
@@ -133,7 +135,7 @@ def summarise_article(title: str, text: str, llm_cfg: dict) -> dict | None:
 
 
 def editorial_pass(all_articles: list[dict], days: int, llm_cfg: dict) -> list[dict]:
-    """Run the editorial pass to merge, rank, and produce transcript structure."""
+    """Run the editorial pass. Raises LLMError on failure."""
     article_list = []
     for i, article in enumerate(all_articles):
         article_list.append(
@@ -163,15 +165,11 @@ def editorial_pass(all_articles: list[dict], days: int, llm_cfg: dict) -> list[d
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        print(f"Error: Failed to parse editorial output as JSON: {e}", file=sys.stderr)
-        print("Raw LLM output:", file=sys.stderr)
-        print(raw[:500], file=sys.stderr)
-        sys.exit(1)
+        raise LLMError(f"Failed to parse editorial output as JSON: {e}\nRaw: {raw[:300]}")
 
     stories = data.get("stories", [])
     if not stories:
-        print("Error: Editorial pass returned no stories.", file=sys.stderr)
-        sys.exit(1)
+        raise LLMError("Editorial pass returned no stories")
 
     # Resolve article indices to URLs
     for story in stories:

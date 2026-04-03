@@ -334,8 +334,7 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
                      Stages: "editorial", "audio", "done".
     """
     if not all_articles:
-        print("No articles to generate a report from.", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError("No articles to generate a report from")
 
     # Editorial pass
     if progress_cb:
