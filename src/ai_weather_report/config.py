@@ -38,6 +38,7 @@ DEFAULT_FEEDS = {
     "a16z": "https://www.a16z.news/feed",
     # AI coding & architecture
     "The Phoenix Architecture": "https://aicoding.leaflet.pub/rss",
+    "Martin Fowler": "https://martinfowler.com/feed.atom",
 }
 
 TTS_DEFAULTS = {
