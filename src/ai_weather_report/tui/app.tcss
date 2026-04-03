@@ -1,199 +1,181 @@
-/* Main app styles */
+/* === Global === */
 
 Screen {
     background: $surface;
 }
 
-/* Feed tab */
+/* === Main Menu === */
 
-FeedTab {
-    height: 1fr;
+MainMenuScreen {
+    align: center middle;
 }
 
-FeedTab Horizontal {
-    height: 1fr;
-}
-
-#article-list-pane {
-    width: 1fr;
-    min-width: 30;
-    border-right: tall $primary-background;
-}
-
-#article-detail-pane {
-    width: 2fr;
-    min-width: 40;
-}
-
-#search-bar {
-    dock: top;
-    height: 3;
-    padding: 0 1;
-}
-
-#search-input {
-    width: 1fr;
-}
-
-#filter-label {
+#ascii-title {
+    text-align: center;
+    color: $accent;
     width: auto;
-    padding: 1 1 0 0;
+}
+
+#menu-options {
+    width: 40;
+    height: auto;
+    border: round $accent;
+    padding: 1 2;
+    background: $surface;
+}
+
+/* === Feed List === */
+
+FeedListScreen {
+    layout: vertical;
+}
+
+#filter-input {
+    dock: top;
+    margin: 0 1;
+}
+
+#feed-list {
+    height: 1fr;
+}
+
+#feed-hint {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-1;
     color: $text-muted;
+}
+
+#feed-status {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    color: $text;
+    padding: 0 1;
 }
 
 ArticleListItem {
     height: 3;
-    padding: 0 1;
+    padding: 0;
 }
 
-ArticleListItem:hover {
-    background: $boost;
+/* === Article Detail === */
+
+ArticleDetailScreen {
+    layout: vertical;
 }
 
-ArticleListItem.--highlight {
-    background: $accent;
+#article-scroll {
+    height: 1fr;
+    padding: 1 2;
 }
 
-.article-title {
-    width: 1fr;
-    text-style: bold;
-}
-
-.article-meta {
-    width: 1fr;
-    color: $text-muted;
-}
-
-.article-indicator {
-    width: 2;
-    color: $success;
-}
-
-.article-indicator-unused {
-    width: 2;
-    color: $text-muted;
-}
-
-#detail-title {
+#article-title {
     text-style: bold;
     width: 1fr;
-    padding: 1 1 0 1;
+    margin-bottom: 1;
 }
 
-#detail-summary {
-    padding: 1;
-    width: 1fr;
-}
-
-#detail-meta {
-    padding: 0 1 1 1;
+#article-source {
     color: $text-muted;
     width: 1fr;
 }
 
-#detail-tags {
-    padding: 0 1;
+#article-summary {
+    width: 1fr;
+    margin: 1 0;
+}
+
+#article-tags {
+    color: $accent;
     width: 1fr;
 }
 
-#detail-reports {
-    padding: 0 1 1 1;
+#article-reports {
     color: $text-muted;
     width: 1fr;
 }
 
-#detail-empty {
-    padding: 2;
+#article-url {
     color: $text-muted;
-    text-align: center;
+    width: 1fr;
 }
 
-#status-bar {
+#article-hint {
     dock: bottom;
     height: 1;
-    padding: 0 1;
+    background: $primary-background-darken-1;
+    color: $text-muted;
+}
+
+/* === Reports List === */
+
+ReportsListScreen {
+    layout: vertical;
+}
+
+#reports-list {
+    height: 1fr;
+}
+
+#reports-hint {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-1;
+    color: $text-muted;
+}
+
+#reports-status {
+    dock: bottom;
+    height: 1;
     background: $primary-background;
     color: $text;
-}
-
-.tag {
-    color: $accent;
-}
-
-/* Reports tab */
-
-ReportsTab {
-    height: 1fr;
-}
-
-ReportsTab Horizontal {
-    height: 1fr;
-}
-
-#report-list-pane {
-    width: 1fr;
-    min-width: 30;
-    border-right: tall $primary-background;
-}
-
-#report-detail-pane {
-    width: 2fr;
-    min-width: 40;
+    padding: 0 1;
 }
 
 ReportListItem {
     height: 2;
-    padding: 0 1;
+    padding: 0;
 }
 
-ReportListItem:hover {
-    background: $boost;
+/* === Report Detail === */
+
+ReportDetailScreen {
+    layout: vertical;
 }
 
-ReportListItem.--highlight {
+#report-scroll {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#report-title {
+    text-style: bold;
+    width: 1fr;
+    margin-bottom: 1;
+}
+
+#report-info {
+    color: $text-muted;
+    width: 1fr;
+}
+
+#report-stories {
+    width: 1fr;
+    margin: 1 0;
+}
+
+#report-playback {
+    dock: bottom;
+    height: 1;
     background: $accent;
-}
-
-.report-title {
-    text-style: bold;
-}
-
-.report-meta {
-    color: $text-muted;
-}
-
-#report-detail-title {
-    text-style: bold;
-    padding: 1;
-}
-
-#report-detail-info {
-    padding: 0 1;
-    color: $text-muted;
-}
-
-#report-detail-stories {
-    padding: 1;
-}
-
-#report-detail-empty {
-    padding: 2;
-    color: $text-muted;
-    text-align: center;
-}
-
-#report-status-bar {
-    dock: bottom;
-    height: 1;
-    padding: 0 1;
-    background: $primary-background;
     color: $text;
+    padding: 0 1;
 }
 
-#playback-bar {
+#report-hint {
     dock: bottom;
     height: 1;
-    padding: 0 1;
     background: $primary-background-darken-1;
-    color: $text;
+    color: $text-muted;
 }
