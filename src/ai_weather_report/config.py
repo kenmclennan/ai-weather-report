@@ -36,6 +36,8 @@ DEFAULT_FEEDS = {
     # Enterprise adoption
     "Sequoia Capital": "https://www.sequoiacap.com/feed/",
     "a16z": "https://www.a16z.news/feed",
+    # AI coding & architecture
+    "The Phoenix Architecture": "https://aicoding.leaflet.pub/rss",
 }
 
 TTS_DEFAULTS = {
