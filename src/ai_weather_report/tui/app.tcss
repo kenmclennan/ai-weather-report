@@ -311,3 +311,61 @@ ReportDetailScreen Center {
     color: $text-muted;
     padding: 0 1;
 }
+
+/* === Config Screen === */
+
+ConfigScreen {
+    layout: vertical;
+}
+
+#config-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 2;
+}
+
+ConfigScreen Center {
+    height: 1fr;
+    background: $surface;
+}
+
+#config-scroll {
+    max-width: 80;
+    height: 1fr;
+    padding: 1 2;
+    scrollbar-size: 0 0;
+}
+
+.config-section-title {
+    color: $accent;
+    text-style: bold;
+    width: 1fr;
+    margin: 1 0 0 0;
+}
+
+.config-help {
+    color: $text-muted;
+    padding: 0 0 0 1;
+}
+
+.config-spacer {
+    height: 1;
+}
+
+#config-status {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    color: $success;
+    padding: 0 1;
+}
+
+#config-hint {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-1;
+    color: $text-muted;
+    padding: 0 1;
+}

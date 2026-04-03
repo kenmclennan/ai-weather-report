@@ -56,9 +56,8 @@ class MainMenuScreen(Screen):
             from ai_weather_report.tui.screens.reports_list import ReportsListScreen
             self.app.push_screen(ReportsListScreen())
         elif option_id == "config":
-            import subprocess
-            from ai_weather_report.config import CONFIG_PATH
-            subprocess.Popen(["open", str(CONFIG_PATH)])
+            from ai_weather_report.tui.screens.config_screen import ConfigScreen
+            self.app.push_screen(ConfigScreen())
         elif option_id == "quit":
             self.app.exit()
 
