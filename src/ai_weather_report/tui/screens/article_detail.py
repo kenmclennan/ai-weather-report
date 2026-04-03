@@ -37,7 +37,7 @@ class ArticleDetailScreen(Screen):
 
         source = a.get("source", "Unknown")
         tags = a.get("tags", [])
-        tag_str = "  ".join(f"\\[{t}]" for t in tags) if tags else "none"
+        tag_str = "  ".join(f"[{t}]" for t in tags) if tags else "none"
         article_reports = a.get("reports", [])
         report_str = ", ".join(article_reports) if article_reports else "Not included in any report"
         url = a.get("url", "")
