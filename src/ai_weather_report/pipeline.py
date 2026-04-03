@@ -99,11 +99,16 @@ def fetch_article_text(url: str) -> str | None:
         return None
 
 
-def fetch_and_summarise(articles: list[dict], llm_cfg: dict) -> list[dict]:
+def fetch_and_summarise(articles: list[dict], llm_cfg: dict,
+                        progress_cb=None) -> list[dict]:
     """Fetch full text and summarise new articles. Returns all articles with summaries.
 
     Cached articles are loaded from the cache. New articles are fetched,
     summarised, and saved to the cache.
+
+    Args:
+        progress_cb: Optional callback(stage, current, total, detail) for progress.
+                     stage is "fetch" or "summarise".
     """
     result = []
     new_articles = [a for a in articles if not a["cached"]]
@@ -120,11 +125,14 @@ def fetch_and_summarise(articles: list[dict], llm_cfg: dict) -> list[dict]:
         return result
 
     # Fetch and summarise new articles
-    print(f"\nFetching {len(new_articles)} new articles...", file=sys.stderr)
+    total_new = len(new_articles)
+    print(f"\nFetching {total_new} new articles...", file=sys.stderr)
     fetched = 0
     failed = 0
 
-    for article in tqdm(new_articles, desc="Fetching articles", file=sys.stderr):
+    for i, article in enumerate(tqdm(new_articles, desc="Fetching articles", file=sys.stderr)):
+        if progress_cb:
+            progress_cb("fetch", i, total_new, article.get("title", ""))
         text = fetch_article_text(article["url"])
         if text:
             article["text"] = text
@@ -132,13 +140,16 @@ def fetch_and_summarise(articles: list[dict], llm_cfg: dict) -> list[dict]:
         else:
             failed += 1
 
-    print(f"Extracted {fetched} of {len(new_articles)} ({failed} failed).", file=sys.stderr)
+    print(f"Extracted {fetched} of {total_new} ({failed} failed).", file=sys.stderr)
 
     # Filter to those with text
     to_summarise = [a for a in new_articles if a.get("text")]
+    total_summarise = len(to_summarise)
 
-    print(f"Summarising {len(to_summarise)} new articles...", file=sys.stderr)
-    for article in tqdm(to_summarise, desc="Summarising", file=sys.stderr):
+    print(f"Summarising {total_summarise} new articles...", file=sys.stderr)
+    for i, article in enumerate(tqdm(to_summarise, desc="Summarising", file=sys.stderr)):
+        if progress_cb:
+            progress_cb("summarise", i, total_summarise, article.get("title", ""))
         llm_result = summarise_article(article["title"], article["text"], llm_cfg)
         if not llm_result:
             continue
@@ -155,6 +166,9 @@ def fetch_and_summarise(articles: list[dict], llm_cfg: dict) -> list[dict]:
         }
         cache.save_article(cached_entry)
         result.append(cached_entry)
+
+    if progress_cb:
+        progress_cb("done", total_summarise, total_summarise, "")
 
     return result
 

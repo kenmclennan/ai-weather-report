@@ -85,7 +85,25 @@ FeedListScreen Center {
 
 #feed-footer {
     dock: bottom;
-    height: 2;
+    height: auto;
+    max-height: 5;
+}
+
+#feed-progress-label {
+    height: 1;
+    padding: 0 1;
+    color: $accent;
+    background: $primary-background;
+}
+
+#feed-progress {
+    height: 1;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+#feed-progress Bar {
+    width: 1fr;
 }
 
 #feed-status {
