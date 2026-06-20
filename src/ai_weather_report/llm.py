@@ -134,8 +134,14 @@ def summarise_article(title: str, text: str, llm_cfg: dict) -> dict | None:
         return {"summary": raw.strip(), "tags": []}
 
 
-def editorial_pass(all_articles: list[dict], days: int, llm_cfg: dict) -> list[dict]:
-    """Run the editorial pass. Raises LLMError on failure."""
+def build_editorial_prompt(all_articles: list[dict], days: int,
+                           recent_headlines: list[str] | None = None) -> str:
+    """Build the editorial user prompt.
+
+    When recent_headlines is non-empty, append an exclusion block listing events
+    already covered by recent reports so the model skips them unless there is a
+    genuinely new development.
+    """
     article_list = []
     for i, article in enumerate(all_articles):
         article_list.append(
@@ -150,6 +156,23 @@ def editorial_pass(all_articles: list[dict], days: int, llm_cfg: dict) -> list[d
         f"a broadcast transcript.\n\n"
         + "\n\n".join(article_list)
     )
+
+    if recent_headlines:
+        covered = "\n".join(f"- {h}" for h in recent_headlines)
+        user_text += (
+            "\n\nThe following stories were already covered in recent reports. "
+            "Do NOT include a story that is substantially the same as any of "
+            "these, unless there is a genuinely new development to report:\n"
+            + covered
+        )
+
+    return user_text
+
+
+def editorial_pass(all_articles: list[dict], days: int, llm_cfg: dict,
+                   recent_headlines: list[str] | None = None) -> list[dict]:
+    """Run the editorial pass. Raises LLMError on failure."""
+    user_text = build_editorial_prompt(all_articles, days, recent_headlines)
 
     print("Running editorial pass...", file=sys.stderr)
     raw = call_llm(user_text, EDITORIAL_SYSTEM, llm_cfg, max_tokens=8192)

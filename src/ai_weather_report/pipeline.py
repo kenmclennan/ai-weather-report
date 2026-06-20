@@ -8,9 +8,17 @@ from tqdm import tqdm
 
 from ai_weather_report import cache
 from ai_weather_report import reports
-from ai_weather_report.llm import summarise_article, editorial_pass
+from ai_weather_report.llm import (
+    build_editorial_prompt, summarise_article, editorial_pass,
+)
 
 CHUNK_SIZE = 1000
+
+# How far back to look for already-covered headlines when deduping events across
+# reports. A fixed window (rather than days-since-last-report) comfortably covers
+# the cache lingering window and any report cadence, and avoids 24h-boundary
+# misses when reports are generated daily.
+DEDUP_LOOKBACK_DAYS = 7
 
 
 # --- Report article selection ---
@@ -411,10 +419,14 @@ def run_report(all_articles: list[dict], days: int, llm_cfg: dict,
     if not all_articles:
         raise ValueError("No articles to generate a report from")
 
-    # Editorial pass
+    # Editorial pass. Pass recent reports' headlines so the model skips events
+    # already covered (the same news via a different outlet is a different URL,
+    # so per-article selection cannot catch it).
     if progress_cb:
         progress_cb("editorial", 0, 1, "Running editorial pass...")
-    stories = editorial_pass(all_articles, days, llm_cfg)
+    recent_headlines = reports.recent_report_headlines(DEDUP_LOOKBACK_DAYS)
+    stories = editorial_pass(all_articles, days, llm_cfg,
+                             recent_headlines=recent_headlines)
     print(f"Editorial selected {len(stories)} stories.\n", file=sys.stderr)
 
     # Build outputs

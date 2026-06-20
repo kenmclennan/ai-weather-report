@@ -20,9 +20,11 @@ judgement (the same judgement it already uses to merge within-run duplicates).
 
 ## Lookback window
 
-Headlines come from reports created within the last `fetch_days` days - the same
-window an article can linger in the cache. If an article is still fetch-eligible,
-the reports that already covered its event fall in that same window. No new
+Headlines come from reports created within a fixed `DEDUP_LOOKBACK_DAYS` window
+(default 7 days). This comfortably covers the cache lingering window (`fetch_days`,
+default 5) and any report cadence. A fixed window is preferred over tying the
+lookback to days-since-last-report: with daily reports that value is ~1, and the
+24h cutoff boundary could exclude yesterday's report by a few hours. No new
 config value.
 
 ## Source of headlines

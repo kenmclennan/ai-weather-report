@@ -1,7 +1,7 @@
 """Report manifest - track generated reports and their contents."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ai_weather_report.config import REPORTS_DIR
@@ -10,6 +10,45 @@ from ai_weather_report.config import REPORTS_DIR
 def report_dir(report_id: str) -> Path:
     """Get the directory for a report."""
     return REPORTS_DIR / report_id
+
+
+def parse_report_headlines(links_md: str) -> list[str]:
+    """Extract the story headlines (## headings) from a links.md body."""
+    headlines = []
+    for line in links_md.splitlines():
+        if line.startswith("## "):
+            headline = line[3:].strip()
+            if headline:
+                headlines.append(headline)
+    return headlines
+
+
+def recent_report_headlines(within_days: int) -> list[str]:
+    """Headlines from reports created within the last `within_days` days.
+
+    Reads each recent report's links.md, parses its headings, and returns a
+    de-duplicated list (preserving first-seen order). Used to tell the editorial
+    pass which events have already been covered.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=within_days)
+    seen = set()
+    headlines = []
+    for report in list_reports():
+        created = report.get("created_at", "")
+        try:
+            created_dt = datetime.fromisoformat(created)
+        except (ValueError, TypeError):
+            continue
+        if created_dt < cutoff:
+            continue
+        links_path = report_dir(report["id"]) / "links.md"
+        if not links_path.exists():
+            continue
+        for headline in parse_report_headlines(links_path.read_text()):
+            if headline not in seen:
+                seen.add(headline)
+                headlines.append(headline)
+    return headlines
 
 
 def save_manifest(report_id: str, articles_used: list[str], story_count: int,
