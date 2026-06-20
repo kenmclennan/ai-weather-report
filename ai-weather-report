@@ -657,7 +657,7 @@ def main():
 
     audio_parts = synthesize_chunks(chunks, tts_cfg, args.format)
 
-    audio_path = out_dir / f"weather-report.{args.format}"
+    audio_path = out_dir / f"weather-report-{timestamp}.{args.format}"
     with open(audio_path, "wb") as f:
         for part in audio_parts:
             f.write(part)

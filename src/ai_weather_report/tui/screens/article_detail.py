@@ -3,6 +3,7 @@
 import webbrowser
 from datetime import datetime
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, VerticalScroll
@@ -56,7 +57,10 @@ class ArticleDetailScreen(Screen):
                 yield Static(f"Tags: {tag_str}", id="article-tags", markup=False)
                 yield Static(f"Reports: {report_str}", id="article-reports", markup=False)
                 if url:
-                    yield Static(f"URL: {url}", id="article-url", markup=False)
+                    url_text = Text()
+                    url_text.append("URL: ")
+                    url_text.append(url, style=f"underline link {url}")
+                    yield Static(url_text, id="article-url")
 
         yield Static(" o  Open in browser    Esc  Back", id="article-hint", markup=False)
 

@@ -1,9 +1,12 @@
 """Report detail screen - view report stories, transcript, links, and play audio."""
 
+import re
 import subprocess
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -12,7 +15,8 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 from ai_weather_report import reports
-from ai_weather_report.config import REPORTS_DIR
+from ai_weather_report.config import REPORTS_DIR, get_tts_config, load_config
+from ai_weather_report.pipeline import regenerate_audio
 from ai_weather_report.player import MpvPlayer, format_time
 
 
@@ -25,15 +29,20 @@ class ReportDetailScreen(Screen):
         Binding("s", "stop_audio", "Stop"),
         Binding("left", "seek_back", "-10s", key_display="\u2190"),
         Binding("right", "seek_forward", "+10s", key_display="\u2192"),
+        Binding("r", "regenerate_audio", "Regen Audio"),
         Binding("t", "open_transcript", "Transcript"),
         Binding("escape", "back", "Back"),
     ]
+
+    SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     def __init__(self, report: dict) -> None:
         super().__init__()
         self.report = report
         self._player = MpvPlayer()
         self._playback_active = False
+        self._regenerating = False
+        self._regen_status = ""
 
     def compose(self) -> ComposeResult:
         r = self.report
@@ -76,12 +85,12 @@ class ReportDetailScreen(Screen):
                 yield Static("", id="report-spacer2")
                 yield Static(transcript, id="report-transcript", markup=False)
 
-                links = self._load_links()
-                if links:
+                links_text = self._build_links_text()
+                if links_text is not None:
                     yield Static("", id="report-spacer3")
                     yield Static("SOURCE LINKS", id="report-links-header")
                     yield Static("", id="report-spacer4")
-                    yield Static(links, id="report-links", markup=False)
+                    yield Static(links_text, id="report-links")
 
         yield Static("", id="report-playback", markup=False)
         yield Static("", id="report-hint", markup=False)
@@ -97,11 +106,16 @@ class ReportDetailScreen(Screen):
             self.query_one("#report-hint", Static).update(
                 " Space  Pause    \u2190/\u2192  Skip 10s    s  Stop    t  Transcript    Esc  Back    q  Quit"
             )
+        elif self._regenerating:
+            self.query_one("#report-hint", Static).update(
+                " Regenerating audio...    Esc  Back    q  Quit"
+            )
+            return
         else:
             hints = []
             if has_audio:
                 hints.append("p  Play")
-            hints.extend(["t  Transcript", "Esc  Back", "q  Quit"])
+            hints.extend(["r  Regen Audio", "t  Transcript", "Esc  Back", "q  Quit"])
             self.query_one("#report-hint", Static).update(
                 " " + "    ".join(hints)
             )
@@ -119,6 +133,39 @@ class ReportDetailScreen(Screen):
         if not links_path.exists():
             return ""
         return links_path.read_text().strip()
+
+    def _build_links_text(self) -> Text | None:
+        """Parse links.md and return a Rich Text object with clickable URLs."""
+        raw = self._load_links()
+        if not raw:
+            return None
+
+        text = Text()
+        url_pattern = re.compile(r"^\s+(https?://\S+)\s*$")
+
+        for i, line in enumerate(raw.splitlines()):
+            if i > 0:
+                text.append("\n")
+
+            match = url_pattern.match(line)
+            if match:
+                url = match.group(1)
+                indent = line[: line.index("h")]
+                text.append(indent)
+                text.append(
+                    url,
+                    style=f"underline link {url}",
+                )
+            elif line.startswith("## "):
+                text.append(line[3:], style="bold")
+            else:
+                text.append(line)
+
+        return text
+
+    def action_open_url(self, url: str) -> None:
+        """Open a URL in the default browser."""
+        webbrowser.open(url)
 
     # --- Playback controls ---
 
@@ -196,6 +243,56 @@ class ReportDetailScreen(Screen):
         if self._playback_active:
             self._playback_active = False
             self.app.call_from_thread(self._show_playback, " Playback finished")
+            self.app.call_from_thread(self._update_hint)
+
+    def action_regenerate_audio(self) -> None:
+        if self._regenerating:
+            return
+        report_id = self.report.get("id", "")
+        transcript_path = REPORTS_DIR / report_id / "transcript.txt"
+        if not transcript_path.exists():
+            self._show_playback("No transcript found - cannot regenerate")
+            return
+        self._regenerating = True
+        self._regen_status = "Starting audio generation..."
+        self._show_playback(self._regen_status)
+        self._update_hint()
+        self._run_regenerate(report_id)
+        self._spin_regenerate()
+
+    @work(thread=True)
+    def _spin_regenerate(self) -> None:
+        """Animate a spinner while regeneration is in progress."""
+        import time as _time
+        frame = 0
+        while self._regenerating:
+            spinner = self.SPINNER_FRAMES[frame % len(self.SPINNER_FRAMES)]
+            self.app.call_from_thread(
+                self._show_playback,
+                f" {spinner} {self._regen_status}")
+            frame += 1
+            _time.sleep(0.1)
+
+    @work(thread=True)
+    def _run_regenerate(self, report_id: str) -> None:
+        def progress(stage, current, total, detail):
+            if stage == "audio":
+                self._regen_status = f"Generating audio chunk {current + 1}/{total}..."
+
+        config = load_config()
+        tts_cfg = get_tts_config(config)
+        result = regenerate_audio(report_id, tts_cfg, progress_cb=progress)
+        self._regenerating = False
+        if result.get("tts_error"):
+            self.app.call_from_thread(
+                self._show_playback, f" TTS failed: {result['tts_error']}")
+        else:
+            # Reload manifest so play button picks up the new audio file
+            updated = reports.load_manifest(report_id)
+            if updated:
+                self.report = updated
+            self.app.call_from_thread(
+                self._show_playback, " Audio regenerated successfully")
             self.app.call_from_thread(self._update_hint)
 
     def action_open_transcript(self) -> None:

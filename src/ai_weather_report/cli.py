@@ -14,7 +14,9 @@ from ai_weather_report.config import (
     needs_setup,
     print_config,
 )
-from ai_weather_report.pipeline import run_fetch, run_report
+from ai_weather_report.pipeline import (
+    regenerate_audio, run_fetch, run_report, select_report_articles,
+)
 
 DEFAULT_DAYS = 3
 
@@ -33,8 +35,14 @@ def cmd_run(args):
     if not all_articles:
         sys.exit(0)
 
+    report_articles = select_report_articles(all_articles)
+    if not report_articles:
+        print("No new articles to report - everything is already in a report.",
+              file=sys.stderr)
+        sys.exit(0)
+
     result = run_report(
-        all_articles, args.days, llm_cfg,
+        report_articles, args.days, llm_cfg,
         tts_cfg=tts_cfg if not args.text_only else None,
         audio_format=args.format,
         text_only=args.text_only,
@@ -65,16 +73,16 @@ def cmd_report(args):
     llm_cfg = get_llm_config(config, model=args.llm_model, provider=args.llm_provider)
     tts_cfg = get_tts_config(config, voice=args.voice, speed=args.speed)
 
-    all_articles = cache.load_all_articles()
-    all_articles = [a for a in all_articles if a.get("summary")]
+    report_articles = select_report_articles(cache.load_all_articles())
 
-    if not all_articles:
-        print("No cached articles. Run 'ai-weather-report fetch' first.", file=sys.stderr)
+    if not report_articles:
+        print("No new articles to report. Run 'ai-weather-report fetch' first, "
+              "or everything is already in a report.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Generating report from {len(all_articles)} cached articles...", file=sys.stderr)
+    print(f"Generating report from {len(report_articles)} cached articles...", file=sys.stderr)
     result = run_report(
-        all_articles, args.days, llm_cfg,
+        report_articles, args.days, llm_cfg,
         tts_cfg=tts_cfg if not args.text_only else None,
         audio_format=args.format,
         text_only=args.text_only,
@@ -119,6 +127,19 @@ def cmd_reports_list(args):
         if not audio:
             audio = "(text only)"
         print(f"{r['id']:<20} {r['story_count']:>8} {r['article_count']:>9} {audio:<10}")
+
+
+def cmd_regenerate_audio(args):
+    """Regenerate audio for an existing report from its transcript."""
+    config = load_config()
+    tts_cfg = get_tts_config(config, voice=args.voice, speed=args.speed)
+
+    result = regenerate_audio(args.report_id, tts_cfg, audio_format=args.format)
+    if result.get("tts_error"):
+        print(f"Error: {result['tts_error']}", file=sys.stderr)
+        sys.exit(1)
+    else:
+        print(f"Audio regenerated for report {args.report_id}")
 
 
 def cmd_tui(args):
@@ -197,6 +218,16 @@ def main():
     _add_common_args(p_report)
     _add_output_args(p_report)
     p_report.set_defaults(func=cmd_report)
+
+    # regenerate-audio
+    p_regen = subparsers.add_parser("regenerate-audio",
+                                     help="Regenerate audio for an existing report")
+    p_regen.add_argument("report_id", help="Report ID (e.g. 2026-04-07-1423)")
+    p_regen.add_argument("--format", choices=["mp3", "wav", "opus", "flac"],
+                         default="mp3", help="Audio format (default: mp3)")
+    p_regen.add_argument("--voice", help="Override TTS voice")
+    p_regen.add_argument("--speed", type=float, help="Override TTS speed")
+    p_regen.set_defaults(func=cmd_regenerate_audio)
 
     # tui
     p_tui = subparsers.add_parser("tui", help="Launch interactive TUI")

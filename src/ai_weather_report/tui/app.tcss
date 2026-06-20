@@ -173,6 +173,8 @@ ArticleDetailScreen Center {
 #article-url {
     color: $text-muted;
     width: 1fr;
+    link-color: $accent;
+    link-style: underline;
 }
 
 #article-hint {
@@ -294,6 +296,8 @@ ReportDetailScreen Center {
 #report-links {
     width: 1fr;
     color: $text-muted;
+    link-color: $accent;
+    link-style: underline;
 }
 
 #report-playback {

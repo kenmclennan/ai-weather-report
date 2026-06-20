@@ -12,7 +12,9 @@ from ai_weather_report.config import (
     get_notify, get_retention_days, get_schedule_time, get_tts_config,
     load_config,
 )
-from ai_weather_report.pipeline import fetch_and_summarise, fetch_feeds, run_report
+from ai_weather_report.pipeline import (
+    fetch_and_summarise, fetch_feeds, run_report, select_report_articles,
+)
 
 PLIST_NAME = "com.ai-weather-report.daemon"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{PLIST_NAME}.plist"
@@ -92,7 +94,7 @@ def _run_daemon_inner() -> None:
         return
 
     # Step 2: Generate report from unreported articles
-    unreported = [a for a in all_articles if a.get("summary") and not a.get("reports")]
+    unreported = select_report_articles(all_articles)
     if not unreported:
         print("No unreported articles for report.")
         if should_notify:

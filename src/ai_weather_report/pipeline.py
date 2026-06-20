@@ -13,6 +13,19 @@ from ai_weather_report.llm import summarise_article, editorial_pass
 CHUNK_SIZE = 1000
 
 
+# --- Report article selection ---
+
+
+def select_report_articles(articles: list[dict]) -> list[dict]:
+    """Articles eligible for a new report: summarised and not yet reported.
+
+    Excluding already-reported articles is what prevents the same stories from
+    recurring across consecutive reports. This is the single source of truth -
+    every report path (CLI, TUI, daemon) must select articles through here.
+    """
+    return [a for a in articles if a.get("summary") and not a.get("reports")]
+
+
 # --- Feed fetching ---
 
 
@@ -88,13 +101,20 @@ def fetch_feeds(feeds_dict: dict, days: int, max_per_feed: int) -> list[dict]:
 
 def fetch_article_text(url: str) -> str | None:
     """Download and extract article text."""
+    import requests
     import trafilatura
 
     try:
-        downloaded = trafilatura.fetch_url(url)
-        if not downloaded:
+        # Use requests instead of trafilatura.fetch_url() because trafilatura
+        # doesn't decompress zstd responses correctly (Python 3.14 + urllib3
+        # advertises zstd support but trafilatura's streaming read skips
+        # decompression, returning raw compressed bytes).
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        html = resp.text
+        if not html:
             return None
-        return trafilatura.extract(downloaded)
+        return trafilatura.extract(html)
     except Exception:
         return None
 
@@ -176,9 +196,16 @@ def fetch_and_summarise(articles: list[dict], llm_cfg: dict,
 # --- Output generation ---
 
 
-def _fix_tts_capitalisation(text: str) -> str:
-    """Fix common capitalisation issues for TTS pronunciation."""
+def _fix_tts_pronunciation(text: str) -> str:
+    """Fix capitalisation and pronunciation issues for TTS."""
     import re
+
+    # Numeric ranges: "2-3" -> "2 to 3", "5-10" -> "5 to 10"
+    text = re.sub(r"(\d+)-(\d+)", r"\1 to \2", text)
+
+    # Model/product names: "GEN-1" -> "GEN 1", "GPT-4o" -> "GPT 4o"
+    # Letters followed by hyphen-digit (preserves the real name minus the hyphen)
+    text = re.sub(r"([A-Za-z])-(\d)", r"\1 \2", text)
 
     # Word-boundary replacements for abbreviations and proper nouns
     fixes = {
@@ -211,15 +238,17 @@ def build_transcript(stories: list[dict], days: int) -> str:
     today = datetime.now().strftime("%B %d, %Y")
     lines = [f"The AI Weather Report for {today}.\n"]
 
-    for story in stories:
+    for i, story in enumerate(stories):
         sources = " and ".join(story["sources"]) if story["sources"] else "multiple sources"
         lines.append(f'{story["headline"]}.')
         lines.append(f"From {sources}.")
-        lines.append(f'{story["body"]}\n')
+        lines.append(story["body"])
+        if i < len(stories) - 1:
+            lines.append("\n. . .\n")
 
-    lines.append(f"That's The AI Weather Report for {today}. Stay informed.")
+    lines.append(f"That's The AI Weather Report for {today}.")
     transcript = "\n".join(lines)
-    return _fix_tts_capitalisation(transcript)
+    return _fix_tts_pronunciation(transcript)
 
 
 def build_links(stories: list[dict]) -> str:
@@ -274,7 +303,8 @@ def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str,
 
     total = len(chunks)
     audio_parts = []
-    for i, chunk in enumerate(tqdm(chunks, desc="Generating audio", file=sys.stderr)):
+    iterator = chunks if progress_cb else tqdm(chunks, desc="Generating audio", file=sys.stderr)
+    for i, chunk in enumerate(iterator):
         if progress_cb:
             progress_cb("audio", i, total, f"Generating audio {i + 1}/{total}")
         payload = {
@@ -298,6 +328,51 @@ def synthesise_chunks(chunks: list[str], tts_cfg: dict, audio_format: str,
 
 
 # --- Full pipeline ---
+
+
+def regenerate_audio(report_id: str, tts_cfg: dict, audio_format: str = "mp3",
+                     progress_cb=None) -> dict:
+    """Regenerate audio for an existing report using its saved transcript.
+
+    Returns a dict with: report_id, tts_error (str or None).
+    """
+    manifest = reports.load_manifest(report_id)
+    if not manifest:
+        raise ValueError(f"Report '{report_id}' not found")
+
+    transcript_path = reports.report_dir(report_id) / "transcript.txt"
+    if not transcript_path.exists():
+        raise ValueError(f"No transcript found for report '{report_id}'")
+
+    transcript = _fix_tts_pronunciation(transcript_path.read_text())
+    chunks = split_into_chunks(transcript)
+    print(f"Split into {len(chunks)} audio chunks.", file=sys.stderr)
+
+    tts_error = None
+    try:
+        audio_parts = synthesise_chunks(chunks, tts_cfg, audio_format,
+                                        progress_cb=progress_cb)
+        audio_data = b"".join(audio_parts)
+        audio_path = reports.save_audio(report_id, audio_data, audio_format)
+
+        # Update manifest with new audio info
+        manifest["audio_format"] = audio_format
+        manifest["audio_file"] = audio_path.name
+        rdir = reports.report_dir(report_id)
+        (rdir / "manifest.json").write_text(
+            __import__("json").dumps(manifest, indent=2)
+        )
+
+        size_mb = len(audio_data) / (1024 * 1024)
+        print(f"Audio: {audio_path} ({size_mb:.1f}MB)", file=sys.stderr)
+    except TTSError as e:
+        tts_error = str(e)
+        print(f"TTS failed: {e}", file=sys.stderr)
+
+    if progress_cb:
+        progress_cb("done", 1, 1, "")
+
+    return {"report_id": report_id, "tts_error": tts_error}
 
 
 def run_fetch(feeds: dict, days: int, max_per_feed: int, llm_cfg: dict,

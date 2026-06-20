@@ -147,7 +147,7 @@ class ReportsListScreen(Screen):
             get_tts_config, load_config,
         )
         from ai_weather_report.pipeline import (
-            fetch_and_summarise, fetch_feeds, run_report,
+            fetch_and_summarise, fetch_feeds, run_report, select_report_articles,
         )
 
         config = load_config()
@@ -197,18 +197,15 @@ class ReportsListScreen(Screen):
             finally:
                 sys.stderr = old_stderr
 
-        # Step 3: Generate report from articles since last report
-        all_articles = cache_mod.load_all_articles()
-        all_articles = [a for a in all_articles if a.get("summary")]
-
-        # Filter to only articles not yet included in any report
-        unreported = [a for a in all_articles if not a.get("reports")]
-        # Use unreported articles if available, otherwise fall back to all
-        report_articles = unreported if unreported else all_articles
+        # Step 3: Generate report from articles not yet in any report.
+        # No fall-back to all articles: when nothing new is available we skip the
+        # report rather than re-report old stories (the duplicate-stories bug).
+        report_articles = select_report_articles(cache_mod.load_all_articles())
 
         if not report_articles:
             self.app.call_from_thread(
-                self._finish_generate, None, None, "No articles available for report"
+                self._finish_generate, None, None,
+                "No new articles to report - everything is already in a report",
             )
             return
 

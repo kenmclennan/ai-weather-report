@@ -91,7 +91,7 @@ def save_audio(report_id: str, audio_data: bytes, audio_format: str) -> Path:
     """Save audio to the report directory."""
     rdir = report_dir(report_id)
     rdir.mkdir(parents=True, exist_ok=True)
-    filename = f"weather-report.{audio_format}"
+    filename = f"weather-report-{report_id}.{audio_format}"
     path = rdir / filename
     path.write_bytes(audio_data)
     return path
